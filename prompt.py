@@ -105,9 +105,10 @@ Gemini의 응답: {responses.get("Gemini", "응답 없음")}
         response = gemini_model.generate_content(evaluation_prompt)
         
         # 응답 텍스트 추출 방식 수정
-        response_text = ""
-        for part in response.parts:
-            response_text += part.text
+        if hasattr(response, 'candidates'):
+            response_text = response.candidates[0].content.parts[0].text
+        else:
+            response_text = response.parts[0].text
             
         # JSON 형식이 아닌 텍스트 제거
         if "```json" in response_text:
