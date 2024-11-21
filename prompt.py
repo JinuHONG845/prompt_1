@@ -28,12 +28,22 @@ if st.button("생성"):
             st.subheader("GPT-4")
             if openai_api_key:
                 try:
+                    # 스트리밍을 위한 빈 컨테이너
+                    message_placeholder = st.empty()
+                    full_response = ""
+                    
                     client = openai.OpenAI(api_key=openai_api_key)
                     response = client.chat.completions.create(
                         model="gpt-4",
-                        messages=[{"role": "user", "content": user_prompt}]
+                        messages=[{"role": "user", "content": user_prompt}],
+                        stream=True
                     )
-                    st.write(response.choices[0].message.content)
+                    
+                    for chunk in response:
+                        if chunk.choices[0].delta.content is not None:
+                            full_response += chunk.choices[0].delta.content
+                            message_placeholder.markdown(full_response + "▌")
+                    message_placeholder.markdown(full_response)
                 except Exception as e:
                     st.error(f"OpenAI 에러: {str(e)}")
             else:
@@ -43,9 +53,13 @@ if st.button("생성"):
             st.subheader("Claude")
             if anthropic_api_key:
                 try:
+                    # 스트리밍을 위한 빈 컨테이너
+                    message_placeholder = st.empty()
+                    full_response = ""
+                    
                     client = Anthropic(api_key=anthropic_api_key)
                     message = client.messages.create(
-                        model="claude-3-sonnet-20240229",
+                        model="claude-2.1",
                         max_tokens=1000,
                         messages=[
                             {
@@ -53,12 +67,14 @@ if st.button("생성"):
                                 "content": user_prompt
                             }
                         ],
-                        stream=False
+                        stream=True
                     )
-                    if hasattr(message.content[0], 'text'):
-                        st.write(message.content[0].text)
-                    else:
-                        st.write(message.content[0])
+                    
+                    for chunk in message:
+                        if chunk.delta.text:
+                            full_response += chunk.delta.text
+                            message_placeholder.markdown(full_response + "▌")
+                    message_placeholder.markdown(full_response)
                 except Exception as e:
                     st.error(f"Anthropic 에러: {str(e)}")
             else:
@@ -68,6 +84,10 @@ if st.button("생성"):
             st.subheader("Gemini Pro")
             if google_api_key:
                 try:
+                    # 스트리밍을 위한 빈 컨테이너
+                    message_placeholder = st.empty()
+                    full_response = ""
+                    
                     genai.configure(api_key=google_api_key)
                     model = genai.GenerativeModel('gemini-pro')
                     response = model.generate_content(
@@ -78,8 +98,14 @@ if st.button("생성"):
                             "top_k": 1,
                             "max_output_tokens": 2048,
                         },
+                        stream=True
                     )
-                    st.write(response.text)
+                    
+                    for chunk in response:
+                        if chunk.text:
+                            full_response += chunk.text
+                            message_placeholder.markdown(full_response + "▌")
+                    message_placeholder.markdown(full_response)
                 except Exception as e:
                     st.error(f"Google AI 에러: {str(e)}")
             else:
