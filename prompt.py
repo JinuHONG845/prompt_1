@@ -7,6 +7,7 @@ import os
 import plotly.graph_objects as go
 import pandas as pd
 from dotenv import load_dotenv
+from openai import OpenAI
 load_dotenv()
 
 # API 키 가져오기
@@ -15,7 +16,22 @@ anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
 google_api_key = os.getenv('GOOGLE_API_KEY')
 
 # OpenAI 클라이언트 설정
-openai.api_key = openai_api_key
+client = OpenAI(api_key=openai_api_key)
+
+# 테스트를 위한 디버그 출력 (개발 시에만 사용)
+print(f"OpenAI API 키 확인: {openai_api_key[:10]}...") 
+
+# OpenAI API 호출 예시
+try:
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "user", "content": user_input}
+        ]
+    )
+except Exception as e:
+    print(f"OpenAI 에러 상세: {str(e)}")
+    raise e
 
 # 세션 상태에 저장
 if 'openai_api_key' not in st.session_state:
