@@ -9,7 +9,7 @@ import pandas as pd
 
 # 페이지 설정
 st.set_page_config(page_title="LLM 모델 비교", layout="wide")
-st.title("LLM 모델 비교 v1(241110)")
+st.title("LLM 모델 비교 v1(241111)")
 
 # 사이드바에 API 키 입력 필드 추가
 with st.sidebar:
@@ -281,6 +281,8 @@ if st.button("생성"):
                         * 정보의 신뢰성과 검증 가능성
                         * 오류나 잘못된 정보가 없는 정도
 
+                    &nbsp;
+
                     * **완성도 (Completeness)**
                         * 주어진 질문에 대해 빠짐없이 포괄적으로 답변한 정도
                         * 질문의 모든 측면을 다루는 정도
@@ -295,6 +297,8 @@ if st.button("생성"):
                         * 문장 구조의 명확성
                         * 전문 용어에 대한 적절한 설명
                         * 논리적 흐름과 구조화된 답변
+
+                    &nbsp;
 
                     * **창의성 (Creativity)**
                         * 응답이 창의적이고 독창적인 관점을 제시하는 정도
