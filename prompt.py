@@ -14,15 +14,35 @@ st.title("LLM 모델 비교 v1(241111)")
 # 사이드바에 API 키 입력 필드 추가
 with st.sidebar:
     st.header("API 키 설정")
-    openai_api_key = st.text_input("OpenAI API Key", type="password")
-    anthropic_api_key = st.text_input("Anthropic API Key", type="password")
-    google_api_key = st.text_input("Google API Key", type="password")
+    openai_api_key = st.text_input("OpenAI API Key", 
+        value=st.session_state.get('openai_api_key', ''), 
+        type="password")
+    anthropic_api_key = st.text_input("Anthropic API Key", 
+        value=st.session_state.get('anthropic_api_key', ''), 
+        type="password")
+    google_api_key = st.text_input("Google API Key", 
+        value=st.session_state.get('google_api_key', ''), 
+        type="password")
+
+    # API 키 저장
+    if openai_api_key:
+        st.session_state['openai_api_key'] = openai_api_key
+    if anthropic_api_key:
+        st.session_state['anthropic_api_key'] = anthropic_api_key
+    if google_api_key:
+        st.session_state['google_api_key'] = google_api_key
 
 # 프롬프트 입력
-user_prompt = st.text_area("프롬프트를 입력하세요:", height=100)
+user_prompt = st.text_area("프롬프트를 입력하세요:", 
+    height=100,
+    placeholder="질문을 입력해주세요...",
+    help="여러 줄의 텍스트를 입력할 수 있습니다.")
 
 # 평가 함수 추가
 def evaluate_responses(responses, openai_client):
+    if not responses:
+        st.error("평가할 응답이 없습니다.")
+        return None
     evaluation_prompt = f"""
 다음 AI 모델들의 응답을 5가지 기준으로 평가해주세요. 
 각 기준은 1-10점으로 평가하며, 반드시 아래 JSON 형식으로만 답변해주세요.
@@ -79,15 +99,8 @@ Gemini의 응답: {responses.get("Gemini", "응답 없음")}
 
 def evaluate_responses_gemini(responses, gemini_model):
     evaluation_prompt = f"""
-다음 AI 모델들의 응답을 5가지 기준으로 평가해주세요. 
+다음 AI 모델들의 응답을 5가 기준으로 평가해주세요. 
 각 기준은 1-10점으로 평가하며, 반드시 아래 JSON 형식으로만 답변해주세요.
-
-평가 기준:
-1. 정확성 (Accuracy): 응답이 얼마나 사실에 기반하고 정확한가?
-2. 완성도 (Completeness): 질문에 대해 얼마나 포괄적으로 답변했는가?
-3. 명확성 (Clarity): 응답이 얼마나 명확하고 이해하기 쉬운가?
-4. 창의성 (Creativity): 응답이 얼마나 창의적이고 독창적인가?
-5. 유용성 (Usefulness): 응답이 실제로 얼마나 유용한가?
 
 평가할 응답들:
 GPT-4의 응답: {responses.get("GPT-4", "응답 없음")}
@@ -105,10 +118,10 @@ Gemini의 응답: {responses.get("Gemini", "응답 없음")}
         response = gemini_model.generate_content(evaluation_prompt)
         
         # 응답 텍스트 추출 방식 수정
-        if hasattr(response, 'candidates'):
-            response_text = response.candidates[0].content.parts[0].text
-        else:
-            response_text = response.parts[0].text
+        response_text = ""
+        for candidate in response.candidates:
+            for part in candidate.content.parts:
+                response_text += part.text
             
         # JSON 형식이 아닌 텍스트 제거
         if "```json" in response_text:
@@ -125,32 +138,41 @@ Gemini의 응답: {responses.get("Gemini", "응답 없음")}
         return evaluation_results
     except Exception as e:
         st.error(f"Gemini 평가 중 오류 발생: {str(e)}")
+        st.error(f"응답 내용: {response_text if 'response_text' in locals() else '응답 없음'}")
         return None
 
-# 레이더 차트 생성 함수
+# 상단에 캐싱 데코레이터 추가
+@st.cache_data(ttl=3600)
 def create_radar_chart(evaluation_results):
     categories = ['정확성', '완성도', '명확성', '창의성', '유용성']
     
     fig = go.Figure()
-    colors = ['rgb(67, 67, 67)', 'rgb(115, 115, 115)', 'rgb(49, 130, 189)', 'rgb(189, 189, 189)']
+    colors = {
+        'GPT-4': 'rgb(0, 122, 255)',
+        'Claude': 'rgb(128, 0, 128)',
+        'Gemini': 'rgb(255, 64, 129)'
+    }
     
-    for i, (model, scores) in enumerate(evaluation_results.items()):
+    for model, scores in evaluation_results.items():
         fig.add_trace(go.Scatterpolar(
             r=[scores[cat] for cat in categories],
             theta=categories,
             fill='toself',
             name=model,
-            line_color=colors[i]
+            line_color=colors.get(model, 'rgb(128, 128, 128)')
         ))
 
     fig.update_layout(
         polar=dict(
             radialaxis=dict(
                 visible=True,
-                range=[0, 10]
+                range=[0, 10],
+                ticktext=['0', '2', '4', '6', '8', '10'],
+                tickvals=[0, 2, 4, 6, 8, 10]
             )),
         showlegend=True,
-        title="LLM 모델 성능 비교"
+        title="LLM 모델 성능 비교",
+        height=500  # 차트 크기 조정
     )
     
     return fig
@@ -162,6 +184,7 @@ if st.button("생성"):
         
         # 응답을 저장할 딕셔너리 초기화
         responses = {}
+        st.session_state['responses'] = responses  # 세션에 저장
         
         with col1:
             st.subheader("GPT-4")
@@ -251,7 +274,7 @@ if st.button("생성"):
             
             # GPT-4 평가
             if openai_api_key:
-                st.subheader("GPT-4의 성능 평가")
+                st.subheader("GPT-4의 성능 ��가")
                 evaluation_results_gpt = evaluate_responses(responses, openai.OpenAI(api_key=openai_api_key))
                 if evaluation_results_gpt:
                     fig_gpt = create_radar_chart(evaluation_results_gpt)
@@ -307,7 +330,7 @@ if st.button("생성"):
                 with col3:
                     st.markdown("""
                     * **유용성 (Usefulness)**
-                        * 실용적 가치
+                        * 실용적 치
                         * 실제 적용 가능성
                         * 문제 해결 기여도
                     """)
