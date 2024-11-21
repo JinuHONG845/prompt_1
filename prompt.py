@@ -213,8 +213,7 @@ if st.button("생성"):
                 st.warning("OpenAI API 키를 입력해주세요.")
 
         with col2:
-            st.subheader("""Claude 3.5
-(claude-3-haiku-20240307)""")
+            st.subheader("Claude 3.5")
             if anthropic_api_key:
                 try:
                     message_placeholder = st.empty()
@@ -222,7 +221,7 @@ if st.button("생성"):
                     
                     client = Anthropic(api_key=anthropic_api_key)
                     message = client.messages.create(
-                        model="claude-3-haiku-20240307",
+                        model="claude-3-sonnet-20240229",
                         max_tokens=1000,
                         messages=[{"role": "user", "content": user_prompt}],
                         stream=True
@@ -233,7 +232,7 @@ if st.button("생성"):
                             full_response += chunk.delta.text
                             message_placeholder.markdown(full_response + "▌")
                     message_placeholder.markdown(full_response)
-                    responses["Claude"] = full_response  # 여기서 응답 저장
+                    responses["Claude"] = full_response
                 except Exception as e:
                     st.error(f"Anthropic 에러: {str(e)}")
             else:
