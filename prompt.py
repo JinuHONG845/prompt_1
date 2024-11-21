@@ -77,6 +77,51 @@ Gemini의 응답: {responses.get("Gemini", "응답 없음")}
         st.error(f"평가 중 오류 발생: {str(e)}")
         return None
 
+def evaluate_responses_gemini(responses, gemini_model):
+    evaluation_prompt = f"""
+다음 AI 모델들의 응답을 5가지 기준으로 평가해주세요. 
+각 기준은 1-10점으로 평가하며, 반드시 아래 JSON 형식으로만 답변해주세요.
+
+평가 기준:
+1. 정확성 (Accuracy): 응답이 얼마나 사실에 기반하고 정확한가?
+2. 완성도 (Completeness): 질문에 대해 얼마나 포괄적으로 답변했는가?
+3. 명확성 (Clarity): 응답이 얼마나 명확하고 이해하기 쉬운가?
+4. 창의성 (Creativity): 응답이 얼마나 창의적이고 독창적인가?
+5. 유용성 (Usefulness): 응답이 실제로 얼마나 유용한가?
+
+평가할 응답들:
+GPT-4의 응답: {responses.get("GPT-4", "응답 없음")}
+Claude의 응답: {responses.get("Claude", "응답 없음")}
+Gemini의 응답: {responses.get("Gemini", "응답 없음")}
+
+다음과 같은 JSON 형식으로만 답변해주세요:
+{{
+    "GPT-4": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 6, "유용성": 8}},
+    "Claude": {{"정확성": 7, "완성도": 8, "명확성": 7, "창의성": 7, "유용성": 7}},
+    "Gemini": {{"정확성": 6, "완성도": 7, "명확성": 8, "창의성": 5, "유용성": 6}}
+}}
+"""
+    try:
+        response = gemini_model.generate_content(evaluation_prompt)
+        response_text = response.text.strip()
+        
+        # JSON 형식이 아닌 텍스트 제거
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0]
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0]
+            
+        response_text = response_text.strip()
+        
+        # 문자열을 딕셔너리로 변환
+        import json
+        evaluation_results = json.loads(response_text)
+        
+        return evaluation_results
+    except Exception as e:
+        st.error(f"Gemini 평가 중 오류 발생: {str(e)}")
+        return None
+
 # 레이더 차트 생성 함수
 def create_radar_chart(evaluation_results):
     categories = ['정확성', '완성도', '명확성', '창의성', '유용성']
@@ -195,26 +240,26 @@ if st.button("생성"):
             else:
                 st.warning("Google API 키를 입력해주세요.")
 
-        # 구분선 추가
-        st.markdown("---")
-        st.subheader("모델 성능 평가")
-        
-        # GPT-4로 평가 수행
-        if openai_api_key:
-            evaluation_results = evaluate_responses(responses, openai.OpenAI(api_key=openai_api_key))
+        # 모든 응답이 수집된 후 평가 진행
+        if responses:
+            st.markdown("---")
             
-            if evaluation_results:
-                # 레이더 차트 생성 및 표시
-                fig = create_radar_chart(evaluation_results)
-                st.plotly_chart(fig)
-                
-                # 상세 평가 결과 표시
-                st.subheader("상세 평가 결과")
-                for model, scores in evaluation_results.items():
-                    st.write(f"**{model}**")
-                    for criterion, score in scores.items():
-                        st.write(f"- {criterion}: {score}/10")
-        else:
-            st.warning("평가를 위해 OpenAI API 키가 필요합니다.")
+            # GPT-4 평가
+            if openai_api_key:
+                st.subheader("GPT-4의 성능 평가")
+                evaluation_results_gpt = evaluate_responses(responses, openai.OpenAI(api_key=openai_api_key))
+                if evaluation_results_gpt:
+                    fig_gpt = create_radar_chart(evaluation_results_gpt)
+                    st.plotly_chart(fig_gpt)
+            
+            # Gemini 평가
+            if google_api_key:
+                st.subheader("Gemini의 성능 평가")
+                genai.configure(api_key=google_api_key)
+                model = genai.GenerativeModel('gemini-pro')
+                evaluation_results_gemini = evaluate_responses_gemini(responses, model)
+                if evaluation_results_gemini:
+                    fig_gemini = create_radar_chart(evaluation_results_gemini)
+                    st.plotly_chart(fig_gemini)
     else:
         st.warning("프롬프트를 입력해주세요.")
