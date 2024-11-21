@@ -86,11 +86,13 @@ if st.button("생성"):
         # 3개의 컬럼으로 변경
         col1, col2, col3 = st.columns(3)
         
+        # 응답을 저장할 딕셔너리 초기화
+        responses = {}
+        
         with col1:
             st.subheader("GPT-4")
             if openai_api_key:
                 try:
-                    # 스트리밍을 위한 빈 컨테이너
                     message_placeholder = st.empty()
                     full_response = ""
                     
@@ -106,6 +108,7 @@ if st.button("생성"):
                             full_response += chunk.choices[0].delta.content
                             message_placeholder.markdown(full_response + "▌")
                     message_placeholder.markdown(full_response)
+                    responses["GPT-4"] = full_response  # 여기서 응답 저장
                 except Exception as e:
                     st.error(f"OpenAI 에러: {str(e)}")
             else:
@@ -115,7 +118,6 @@ if st.button("생성"):
             st.subheader("Claude")
             if anthropic_api_key:
                 try:
-                    # 스트리밍을 위한 빈 컨테이너
                     message_placeholder = st.empty()
                     full_response = ""
                     
@@ -123,12 +125,7 @@ if st.button("생성"):
                     message = client.messages.create(
                         model="claude-3-haiku-20240307",
                         max_tokens=1000,
-                        messages=[
-                            {
-                                "role": "user",
-                                "content": user_prompt
-                            }
-                        ],
+                        messages=[{"role": "user", "content": user_prompt}],
                         stream=True
                     )
                     
@@ -137,6 +134,7 @@ if st.button("생성"):
                             full_response += chunk.delta.text
                             message_placeholder.markdown(full_response + "▌")
                     message_placeholder.markdown(full_response)
+                    responses["Claude"] = full_response  # 여기서 응답 저장
                 except Exception as e:
                     st.error(f"Anthropic 에러: {str(e)}")
             else:
@@ -146,7 +144,6 @@ if st.button("생성"):
             st.subheader("Gemini Pro")
             if google_api_key:
                 try:
-                    # 스트리밍을 위한 빈 컨테이너
                     message_placeholder = st.empty()
                     full_response = ""
                     
@@ -168,19 +165,12 @@ if st.button("생성"):
                             full_response += chunk.text
                             message_placeholder.markdown(full_response + "▌")
                     message_placeholder.markdown(full_response)
+                    responses["Gemini"] = full_response  # 여기서 응답 저장
                 except Exception as e:
                     st.error(f"Google AI 에러: {str(e)}")
             else:
                 st.warning("Google API 키를 입력해주세요.")
 
-        # 모든 응답을 저장할 딕셔너리
-        responses = {}
-        
-        # 각 모델의 응답을 저장
-        responses["GPT-4"] = full_response_gpt4
-        responses["Claude"] = full_response_claude
-        responses["Gemini"] = full_response_gemini
-        
         # 구분선 추가
         st.markdown("---")
         st.subheader("모델 성능 평가")
