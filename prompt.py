@@ -6,31 +6,22 @@ import google.generativeai as genai
 import os
 import plotly.graph_objects as go
 import pandas as pd
+from dotenv import load_dotenv
+load_dotenv()
+
+# API 키를 환경변수에서 직접 가져오기
+openai_api_key = os.getenv('OPENAI_API_KEY')
+anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
+google_api_key = os.getenv('GOOGLE_API_KEY')
+
+# 세션 상태에 API 키 저장
+st.session_state['openai_api_key'] = openai_api_key
+st.session_state['anthropic_api_key'] = anthropic_api_key
+st.session_state['google_api_key'] = google_api_key
 
 # 페이지 설정
 st.set_page_config(page_title="LLM 모델 비교", layout="wide")
 st.title("LLM 모델 비교 v1(241111)")
-
-# 사이드바에 API 키 입력 필드 추가
-with st.sidebar:
-    st.header("API 키 설정")
-    openai_api_key = st.text_input("OpenAI API Key", 
-        value=st.session_state.get('openai_api_key', ''), 
-        type="password")
-    anthropic_api_key = st.text_input("Anthropic API Key", 
-        value=st.session_state.get('anthropic_api_key', ''), 
-        type="password")
-    google_api_key = st.text_input("Google API Key", 
-        value=st.session_state.get('google_api_key', ''), 
-        type="password")
-
-    # API 키 저장
-    if openai_api_key:
-        st.session_state['openai_api_key'] = openai_api_key
-    if anthropic_api_key:
-        st.session_state['anthropic_api_key'] = anthropic_api_key
-    if google_api_key:
-        st.session_state['google_api_key'] = google_api_key
 
 # 프롬프트 입력
 user_prompt = st.text_area("프롬프트를 입력하세요:", 
