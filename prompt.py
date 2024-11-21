@@ -213,7 +213,8 @@ if st.button("생성"):
                 st.warning("OpenAI API 키를 입력해주세요.")
 
         with col2:
-            st.subheader("Claude")
+            st.subheader("""Claude 3.5
+(claude-3-haiku-20240307)""")
             if anthropic_api_key:
                 try:
                     message_placeholder = st.empty()
