@@ -87,7 +87,7 @@ def evaluate_responses_gemini(responses, gemini_model):
 2. 완성도 (Completeness): 질문에 대해 얼마나 포괄적으로 답변했는가?
 3. 명확성 (Clarity): 응답이 얼마나 명확하고 이해하기 쉬운가?
 4. 창의성 (Creativity): 응답이 얼마나 창의적이고 독창적인가?
-5. 유용성 (Usefulness): 응답이 실제로 얼마나 유용���가?
+5. 유용성 (Usefulness): 응답이 실제로 얼마나 유용한가?
 
 평가할 응답들:
 GPT-4의 응답: {responses.get("GPT-4", "응답 없음")}
@@ -103,8 +103,12 @@ Gemini의 응답: {responses.get("Gemini", "응답 없음")}
 """
     try:
         response = gemini_model.generate_content(evaluation_prompt)
-        response_text = response.text.strip()
         
+        # 응답 텍스트 추출 방식 수정
+        response_text = ""
+        for part in response.parts:
+            response_text += part.text
+            
         # JSON 형식이 아닌 텍스트 제거
         if "```json" in response_text:
             response_text = response_text.split("```json")[1].split("```")[0]
