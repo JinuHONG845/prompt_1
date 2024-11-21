@@ -9,15 +9,26 @@ import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
 
-# API 키를 환경변수에서 직접 가져오기
+# API 키 가져오기
 openai_api_key = os.getenv('OPENAI_API_KEY')
 anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
 google_api_key = os.getenv('GOOGLE_API_KEY')
 
-# 세션 상태에 API 키 저장
-st.session_state['openai_api_key'] = openai_api_key
-st.session_state['anthropic_api_key'] = anthropic_api_key
-st.session_state['google_api_key'] = google_api_key
+# OpenAI 클라이언트 설정
+openai.api_key = openai_api_key
+
+# 세션 상태에 저장
+if 'openai_api_key' not in st.session_state:
+    st.session_state['openai_api_key'] = openai_api_key
+if 'anthropic_api_key' not in st.session_state:
+    st.session_state['anthropic_api_key'] = anthropic_api_key
+if 'google_api_key' not in st.session_state:
+    st.session_state['google_api_key'] = google_api_key
+
+# API 키가 설정되었는지 확인 (디버깅용)
+if not openai_api_key:
+    st.error("OpenAI API 키가 설정되지 않았습니다.")
+    st.stop()
 
 # 페이지 설정
 st.set_page_config(page_title="LLM 모델 비교", layout="wide")
