@@ -5,6 +5,8 @@ from google.generativeai import GenerativeModel
 import google.generativeai as genai
 import os
 import requests  # Perplexity API를 위해 추가
+import plotly.graph_objects as go
+import pandas as pd
 
 # 페이지 설정
 st.set_page_config(page_title="LLM 모델 비교", layout="wide")
@@ -20,6 +22,66 @@ with st.sidebar:
 
 # 프롬프트 입력
 user_prompt = st.text_area("프롬프트를 입력하세요:", height=100)
+
+# 평가 함수 추가
+def evaluate_responses(responses, openai_client):
+    evaluation_prompt = """
+    다음 AI 모델들의 응답을 5가지 기준으로 평가해주세요:
+    1. 정확성 (Accuracy): 응답이 얼마나 사실에 기반하고 정확한가? (1-10점)
+    2. 완성도 (Completeness): 질문에 대해 얼마나 포괄적으로 답변했는가? (1-10점)
+    3. 명확성 (Clarity): 응답이 얼마나 명확하고 이해하기 쉬운가? (1-10점)
+    4. 창의성 (Creativity): 응답이 얼마나 창의적이고 독창적인가? (1-10점)
+    5. 유용성 (Usefulness): 응답이 실제로 얼마나 유용한가? (1-10점)
+
+    각 모델의 응답:
+    {responses}
+
+    JSON 형식으로 평가 결과를 출력해주세요. 예시:
+    {
+        "GPT-4": {"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 6, "유용성": 8},
+        "Claude": {"정확성": 7, "완성도": 8, "명확성": 7, "창의성": 7, "유용성": 7},
+        "Gemini": {"정확성": 6, "완성도": 7, "명확성": 8, "창의성": 5, "유용성": 6}
+    }
+    """
+    
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": evaluation_prompt.format(responses=responses)}],
+            temperature=0.7
+        )
+        return eval(response.choices[0].message.content)
+    except Exception as e:
+        st.error(f"평가 중 오류 발생: {str(e)}")
+        return None
+
+# 레이더 차트 생성 함수
+def create_radar_chart(evaluation_results):
+    categories = ['정확성', '완성도', '명확성', '창의성', '유용성']
+    
+    fig = go.Figure()
+    colors = ['rgb(67, 67, 67)', 'rgb(115, 115, 115)', 'rgb(49, 130, 189)', 'rgb(189, 189, 189)']
+    
+    for i, (model, scores) in enumerate(evaluation_results.items()):
+        fig.add_trace(go.Scatterpolar(
+            r=[scores[cat] for cat in categories],
+            theta=categories,
+            fill='toself',
+            name=model,
+            line_color=colors[i]
+        ))
+
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 10]
+            )),
+        showlegend=True,
+        title="LLM 모델 성능 비교"
+    )
+    
+    return fig
 
 if st.button("생성"):
     if user_prompt:
@@ -152,5 +214,35 @@ if st.button("생성"):
                     st.error(f"Perplexity 에러: {str(e)}")
             else:
                 st.warning("Perplexity API 키를 입력해주세요.")
+
+        # 모든 응답을 저장할 딕셔너리
+        responses = {}
+        
+        # 각 모델의 응답을 저장
+        responses["GPT-4"] = full_response_gpt4
+        responses["Claude"] = full_response_claude
+        responses["Gemini"] = full_response_gemini
+        
+        # 구분선 추가
+        st.markdown("---")
+        st.subheader("모델 성능 평가")
+        
+        # GPT-4로 평가 수행
+        if openai_api_key:
+            evaluation_results = evaluate_responses(responses, openai.OpenAI(api_key=openai_api_key))
+            
+            if evaluation_results:
+                # 레이더 차트 생성 및 표시
+                fig = create_radar_chart(evaluation_results)
+                st.plotly_chart(fig)
+                
+                # 상세 평가 결과 표시
+                st.subheader("상세 평가 결과")
+                for model, scores in evaluation_results.items():
+                    st.write(f"**{model}**")
+                    for criterion, score in scores.items():
+                        st.write(f"- {criterion}: {score}/10")
+        else:
+            st.warning("평가를 위해 OpenAI API 키가 필요합니다.")
     else:
         st.warning("프롬프트를 입력해주세요.")
