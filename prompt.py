@@ -99,7 +99,7 @@ Gemini의 응답: {responses.get("Gemini", "응답 없음")}
 
 def evaluate_responses_gemini(responses, gemini_model):
     evaluation_prompt = f"""
-다음 AI 모델들의 응답을 5가 기준으로 평가해주세요. 
+다음 AI 모델들의 응답을 5가지 기준으로 평가해주세요. 
 각 기준은 1-10점으로 평가하며, 반드시 아래 JSON 형식으로만 답변해주세요.
 
 평가할 응답들:
@@ -118,10 +118,10 @@ Gemini의 응답: {responses.get("Gemini", "응답 없음")}
         response = gemini_model.generate_content(evaluation_prompt)
         
         # 응답 텍스트 추출 방식 수정
-        response_text = ""
-        for candidate in response.candidates:
-            for part in candidate.content.parts:
-                response_text += part.text
+        if hasattr(response, 'candidates'):
+            response_text = response.candidates[0].content.parts[0].text
+        else:
+            response_text = response.parts[0].text if hasattr(response, 'parts') else ""
             
         # JSON 형식이 아닌 텍스트 제거
         if "```json" in response_text:
@@ -138,6 +138,7 @@ Gemini의 응답: {responses.get("Gemini", "응답 없음")}
         return evaluation_results
     except Exception as e:
         st.error(f"Gemini 평가 중 오류 발생: {str(e)}")
+        st.error(f"응답 구조: {type(response)}")
         st.error(f"응답 내용: {response_text if 'response_text' in locals() else '응답 없음'}")
         return None
 
