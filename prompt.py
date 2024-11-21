@@ -274,7 +274,7 @@ if st.button("생성"):
             
             # GPT-4 평가
             if openai_api_key:
-                st.subheader("GPT-4의 성능 ��가")
+                st.subheader("GPT-4의 성능 평가")
                 evaluation_results_gpt = evaluate_responses(responses, openai.OpenAI(api_key=openai_api_key))
                 if evaluation_results_gpt:
                     fig_gpt = create_radar_chart(evaluation_results_gpt)
@@ -330,7 +330,7 @@ if st.button("생성"):
                 with col3:
                     st.markdown("""
                     * **유용성 (Usefulness)**
-                        * 실용적 치
+                        * 실용적 가치
                         * 실제 적용 가능성
                         * 문제 해결 기여도
                     """)
