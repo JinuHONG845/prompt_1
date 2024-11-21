@@ -23,32 +23,56 @@ user_prompt = st.text_area("프롬프트를 입력하세요:", height=100)
 
 # 평가 함수 추가
 def evaluate_responses(responses, openai_client):
-    evaluation_prompt = """
-    다음 AI 모델들의 응답을 5가지 기준으로 평가해주세요:
-    1. 정확성 (Accuracy): 응답이 얼마나 사실에 기반하고 정확한가? (1-10점)
-    2. 완성도 (Completeness): 질문에 대해 얼마나 포괄적으로 답변했는가? (1-10점)
-    3. 명확성 (Clarity): 응답이 얼마나 명확하고 이해하기 쉬운가? (1-10점)
-    4. 창의성 (Creativity): 응답이 얼마나 창의적이고 독창적인가? (1-10점)
-    5. 유용성 (Usefulness): 응답이 실제로 얼마나 유용한가? (1-10점)
+    evaluation_prompt = f"""
+다음 AI 모델들의 응답을 5가지 기준으로 평가해주세요. 
+각 기준은 1-10점으로 평가하며, 반드시 아래 JSON 형식으로만 답변해주세요.
 
-    각 모델의 응답:
-    {responses}
+평가 기준:
+1. 정확성 (Accuracy): 응답이 얼마나 사실에 기반하고 정확한가?
+2. 완성도 (Completeness): 질문에 대해 얼마나 포괄적으로 답변했는가?
+3. 명확성 (Clarity): 응답이 얼마나 명확하고 이해하기 쉬운가?
+4. 창의성 (Creativity): 응답이 얼마나 창의적이고 독창적인가?
+5. 유용성 (Usefulness): 응답이 실제로 얼마나 유용한가?
 
-    JSON 형식으로 평가 결과를 출력해주세요. 예시:
-    {
-        "GPT-4": {"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 6, "유용성": 8},
-        "Claude": {"정확성": 7, "완성도": 8, "명확성": 7, "창의성": 7, "유용성": 7},
-        "Gemini": {"정확성": 6, "완성도": 7, "명확성": 8, "창의성": 5, "유용성": 6}
-    }
-    """
+평가할 응답들:
+GPT-4의 응답: {responses.get("GPT-4", "응답 없음")}
+Claude의 응답: {responses.get("Claude", "응답 없음")}
+Gemini의 응답: {responses.get("Gemini", "응답 없음")}
+
+다음과 같은 JSON 형식으로만 답변해주세요:
+{{
+    "GPT-4": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 6, "유용성": 8}},
+    "Claude": {{"정확성": 7, "완성도": 8, "명확성": 7, "창의성": 7, "유용성": 7}},
+    "Gemini": {{"정확성": 6, "완성도": 7, "명확성": 8, "창의성": 5, "유용성": 6}}
+}}
+"""
     
     try:
         response = openai_client.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": evaluation_prompt.format(responses=responses)}],
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that evaluates AI model responses and provides evaluations in valid JSON format only."},
+                {"role": "user", "content": evaluation_prompt}
+            ],
             temperature=0.7
         )
-        return eval(response.choices[0].message.content)
+        
+        # 응답에서 JSON 부분만 추출
+        response_text = response.choices[0].message.content.strip()
+        
+        # JSON 형식이 아닌 텍스트 제거
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0]
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0]
+            
+        response_text = response_text.strip()
+        
+        # 문자열을 딕셔너리로 변환
+        import json
+        evaluation_results = json.loads(response_text)
+        
+        return evaluation_results
     except Exception as e:
         st.error(f"평가 중 오류 발생: {str(e)}")
         return None
