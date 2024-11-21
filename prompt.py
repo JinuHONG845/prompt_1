@@ -4,7 +4,6 @@ from anthropic import Anthropic
 from google.generativeai import GenerativeModel
 import google.generativeai as genai
 import os
-import requests  # Perplexity API를 위해 추가
 import plotly.graph_objects as go
 import pandas as pd
 
@@ -18,7 +17,6 @@ with st.sidebar:
     openai_api_key = st.text_input("OpenAI API Key", type="password")
     anthropic_api_key = st.text_input("Anthropic API Key", type="password")
     google_api_key = st.text_input("Google API Key", type="password")
-    perplexity_api_key = st.text_input("Perplexity API Key", type="password")  # 추가
 
 # 프롬프트 입력
 user_prompt = st.text_area("프롬프트를 입력하세요:", height=100)
@@ -85,11 +83,10 @@ def create_radar_chart(evaluation_results):
 
 if st.button("생성"):
     if user_prompt:
-        # 2x2 그리드로 변경
-        row1_col1, row1_col2 = st.columns(2)
-        row2_col1, row2_col2 = st.columns(2)
+        # 3개의 컬럼으로 변경
+        col1, col2, col3 = st.columns(3)
         
-        with row1_col1:
+        with col1:
             st.subheader("GPT-4")
             if openai_api_key:
                 try:
@@ -114,7 +111,7 @@ if st.button("생성"):
             else:
                 st.warning("OpenAI API 키를 입력해주세요.")
 
-        with row1_col2:
+        with col2:
             st.subheader("Claude")
             if anthropic_api_key:
                 try:
@@ -145,7 +142,7 @@ if st.button("생성"):
             else:
                 st.warning("Anthropic API 키를 입력해주세요.")
 
-        with row2_col1:
+        with col3:
             st.subheader("Gemini Pro")
             if google_api_key:
                 try:
@@ -175,45 +172,6 @@ if st.button("생성"):
                     st.error(f"Google AI 에러: {str(e)}")
             else:
                 st.warning("Google API 키를 입력해주세요.")
-
-        with row2_col2:
-            st.subheader("Perplexity")
-            if perplexity_api_key:
-                try:
-                    # 스트리밍을 위한 빈 컨테이너
-                    message_placeholder = st.empty()
-                    
-                    headers = {
-                        "Authorization": f"Bearer {perplexity_api_key}",
-                        "Content-Type": "application/json"
-                    }
-                    
-                    data = {
-                        "model": "pplx-7b-online",  # or "pplx-70b-online"
-                        "messages": [{"role": "user", "content": user_prompt}],
-                        "stream": True
-                    }
-                    
-                    response = requests.post(
-                        "https://api.perplexity.ai/chat/completions",
-                        headers=headers,
-                        json=data,
-                        stream=True
-                    )
-                    
-                    full_response = ""
-                    for line in response.iter_lines():
-                        if line:
-                            if b"content" in line:
-                                content = line.decode().split("content\":\"")[1].split("\"")[0]
-                                full_response += content
-                                message_placeholder.markdown(full_response + "▌")
-                    
-                    message_placeholder.markdown(full_response)
-                except Exception as e:
-                    st.error(f"Perplexity 에러: {str(e)}")
-            else:
-                st.warning("Perplexity API 키를 입력해주세요.")
 
         # 모든 응답을 저장할 딕셔너리
         responses = {}
