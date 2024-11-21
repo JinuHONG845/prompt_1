@@ -7,7 +7,7 @@ import os
 
 # 페이지 설정
 st.set_page_config(page_title="LLM 모델 비교", layout="wide")
-st.title("LLM 모델 비교 v1(241110)")
+st.title("LLM 모델 비교 v1(241110_3)")
 
 # 사이드바에 API 키 입력 필드 추가
 with st.sidebar:
@@ -59,7 +59,7 @@ if st.button("생성"):
                     
                     client = Anthropic(api_key=anthropic_api_key)
                     message = client.messages.create(
-                        model="claude-2.1",
+                        model="claude-3-haiku-20240307",
                         max_tokens=1000,
                         messages=[
                             {
