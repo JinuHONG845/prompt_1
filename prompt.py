@@ -49,7 +49,7 @@ class OpenAIClient(LLMClient):
 
 class ClaudeClient(LLMClient):
     def validate_api_key(self) -> bool:
-        return self.api_key.startswith('sk-ant-')
+        return bool(self.api_key)  # Claude API 키는 형식이 다양할 수 있음
 
     def generate_response(self, prompt: str) -> Optional[str]:
         try:
@@ -57,24 +57,33 @@ class ClaudeClient(LLMClient):
             message_placeholder = st.empty()
             full_response = ""
             
+            # 최신 Claude 3 Sonnet 모델 사용
             response = client.messages.create(
-                model="claude-3-sonnet-20240229",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1000,
+                model="claude-3-sonnet-20240229",  # 최신 모델 버전
+                max_tokens=4096,  # 토큰 제한 증가
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }],
                 stream=True
             )
             
             for chunk in response:
                 if hasattr(chunk, 'content') and chunk.content:
                     for content_block in chunk.content:
-                        if content_block.text:
+                        if hasattr(content_block, 'text') and content_block.text:
                             full_response += content_block.text
                             message_placeholder.markdown(full_response + "▌")
             
             message_placeholder.markdown(full_response)
             return full_response
+            
         except Exception as e:
-            st.error(f"Claude 에러: {str(e)}")
+            error_message = str(e)
+            if "authentication" in error_message.lower():
+                st.error("Claude API 키가 유효하지 않습니다. API 키를 확인해주세요.")
+            else:
+                st.error(f"Claude 에러: {error_message}")
             return None
 
 class GeminiClient(LLMClient):
