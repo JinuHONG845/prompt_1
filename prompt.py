@@ -142,7 +142,7 @@ class ModelEvaluator:
         try:
             evaluation_prompt = f"""
             다음 응답들을 5가지 기준으로 평가하여 1-10점으로 점수를 매겨주세요.
-            오직 JSON 형식으로만 응답해주세요.
+            반드시 아래 JSON 형식으로만 응답해주세요. 다른 설명은 포함하지 마세요.
 
             [평가할 응답들]
             ChatGPT 4O의 응답:
@@ -155,99 +155,90 @@ class ModelEvaluator:
             {responses.get("Gemini Pro", "응답 없음")}
 
             [평가 기준]
-            - 정확성: 정보의 사실성과 신뢰성
-            - 완성도: 응답의 포괄성과 충실성
-            - 명확성: 설명의 논리성과 이해도
-            - 창의성: 독창적 관점과 해결방안
-            - 유용성: 실용적 가치와 적용성
+            - 정확성: 정보의 사실성과 신뢰성 (1-10점)
+            - 완성도: 응답의 포괄성과 충실성 (1-10점)
+            - 명확성: 설명의 논리성과 이해도 (1-10점)
+            - 창의성: 독창적 관점과 해결방안 (1-10점)
+            - 유용성: 실용적 가치와 적용성 (1-10점)
 
             [응답 형식]
             {{
                 "{model_name}": {{
-                    "정확성": (1-10점),
-                    "완성도": (1-10점),
-                    "명확성": (1-10점),
-                    "창의성": (1-10점),
-                    "유용성": (1-10점)
+                    "정확성": 8,
+                    "완성도": 7,
+                    "명확성": 9,
+                    "창의성": 6,
+                    "유용성": 8
                 }}
             }}
             """
             
             response = client.generate_response(evaluation_prompt)
             if response:
-                # JSON 형식 추출
-                json_match = re.search(r'\{[\s\S]*\}', response)
-                if json_match:
-                    return json.loads(json_match.group())
+                try:
+                    # JSON 문자열 추출 및 파싱
+                    json_str = re.search(r'\{[^{}]*\{[^{}]*\}[^{}]*\}', response)
+                    if json_str:
+                        evaluation_data = json.loads(json_str.group())
+                        st.write("파싱된 평가 데이터:", evaluation_data)  # 디버깅용
+                        return evaluation_data
+                    else:
+                        st.error("JSON 형식을 찾을 수 없습니다.")
+                        return None
+                except json.JSONDecodeError as e:
+                    st.error(f"JSON 파싱 오류: {str(e)}")
+                    return None
             return None
             
         except Exception as e:
             st.error(f"평가 중 오류 발생: {str(e)}")
             return None
 
-    def create_radar_chart(self, evaluation_data: Dict) -> go.Figure:
+    def create_radar_chart(self, evaluation_data: Dict) -> Optional[go.Figure]:
         try:
+            st.write("입력 데이터:", evaluation_data)  # 디버깅용
+            
+            if not evaluation_data:
+                st.error("평가 데이터가 비어있습니다.")
+                return None
+            
             categories = ['정확성', '완성도', '명확성', '창의성', '유용성']
             fig = go.Figure()
             
-            # 디버깅을 위한 데이터 출력
-            st.write("차트 생성을 위한 데이터:", evaluation_data)
+            # 첫 번째 모델의 데이터 추출
+            model_name = list(evaluation_data.keys())[0]
+            scores = evaluation_data[model_name]
             
-            # 데이터 구조 검증
-            if not evaluation_data or not isinstance(evaluation_data, dict):
-                st.error("유효하지 않은 평가 데이터입니다.")
-                return None
+            # 점수 리스트 생성
+            values = [float(scores[cat]) for cat in categories]
             
-            # 평가 데이터에서 모델 이름과 점수 추출
-            try:
-                model_name = list(evaluation_data.keys())[0]
-                scores = evaluation_data[model_name]
-                
-                # 점수 데이터 검증
-                if not all(cat in scores for cat in categories):
-                    st.error("평가 데이터에 필요한 카테고리가 누락되었습니다.")
-                    return None
-                
-                # 점수 리스트 생성
-                values = []
-                for cat in categories:
-                    score = float(scores[cat])  # 문자열인 경우를 대비해 float로 변환
-                    if 0 <= score <= 10:  # 점수 범위 검증
-                        values.append(score)
-                    else:
-                        st.error(f"유효하지 않은 점수 범위: {cat}={score}")
-                        return None
-                
-                # 레이더 차트 생성
-                fig.add_trace(go.Scatterpolar(
-                    r=values,
-                    theta=categories,
-                    name=model_name,
-                    fill='toself',
-                    line_color=MODEL_COLORS.get(model_name, '#000000')
-                ))
-                
-                # 차트 레이아웃 설정
-                fig.update_layout(
-                    polar=dict(
-                        radialaxis=dict(
-                            visible=True,
-                            range=[0, 10]
-                        )
-                    ),
-                    showlegend=True,
-                    title=f"{model_name} 평가 결과",
-                    height=400
-                )
-                
-                return fig
-                
-            except Exception as e:
-                st.error(f"데이터 처리 중 오류: {str(e)}")
-                return None
+            # 레이더 차트 생성
+            fig.add_trace(go.Scatterpolar(
+                r=values,
+                theta=categories,
+                name=model_name,
+                fill='toself',
+                line_color=MODEL_COLORS.get(model_name, '#000000')
+            ))
+            
+            # 차트 레이아웃 설정
+            fig.update_layout(
+                polar=dict(
+                    radialaxis=dict(
+                        visible=True,
+                        range=[0, 10]
+                    )
+                ),
+                showlegend=True,
+                title=f"{model_name} 평가 결과",
+                height=400
+            )
+            
+            return fig
             
         except Exception as e:
             st.error(f"차트 생성 중 오류: {str(e)}")
+            st.write("오류 발생 시 데이터:", evaluation_data)  # 디버깅용
             return None
 
 @st.cache_data(ttl=3600)  # 1시간 캐시
