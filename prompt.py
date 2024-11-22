@@ -162,38 +162,49 @@ class ModelEvaluator:
 
     def create_radar_chart(self, evaluation_data: Dict) -> go.Figure:
         """레이더 차트 생성"""
-        categories = ['정확성', '완성도', '명확성', '창의성', '유용성']
-        
-        fig = go.Figure()
-        
-        colors = {
-            'ChatGPT 4O': '#00A67E',     # OpenAI 녹색
-            'Claude 3.5': '#000000',      # Anthropic 검정
-            'Gemini Pro': '#1A73E8'       # Google 파랑
-        }
-        
-        for model_name, scores in evaluation_data.items():
-            fig.add_trace(go.Scatterpolar(
-                r=[scores[cat] for cat in categories],
-                theta=categories,
-                name=model_name,
-                fill='toself',
-                line_color=colors.get(model_name, '#000000')
-            ))
-        
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 10]
-                )
-            ),
-            showlegend=True,
-            title="모델 성능 비교",
-            height=400
-        )
-        
-        return fig
+        try:
+            categories = ['정확성', '완성도', '명확성', '창의성', '유용성']
+            
+            fig = go.Figure()
+            
+            colors = {
+                'ChatGPT 4O': '#00A67E',     # OpenAI 녹색
+                'Claude 3.5': '#000000',      # Anthropic 검정
+                'Gemini Pro': '#1A73E8'       # Google 파랑
+            }
+            
+            # 데이터 구조 디버깅
+            st.write("평가 데이터:", evaluation_data)
+            
+            for model_name, scores in evaluation_data.items():
+                try:
+                    values = [scores.get(cat, 0) for cat in categories]  # 누락된 카테고리는 0으로 처리
+                    fig.add_trace(go.Scatterpolar(
+                        r=values,
+                        theta=categories,
+                        name=model_name,
+                        fill='toself',
+                        line_color=colors.get(model_name, '#000000')
+                    ))
+                except Exception as e:
+                    st.error(f"모델 {model_name} 데이터 처리 중 오류: {str(e)}")
+            
+            fig.update_layout(
+                polar=dict(
+                    radialaxis=dict(
+                        visible=True,
+                        range=[0, 10]
+                    )
+                ),
+                showlegend=True,
+                title="모델 성능 비교",
+                height=400
+            )
+            
+            return fig
+        except Exception as e:
+            st.error(f"레이더 차트 생성 중 오류: {str(e)}")
+            return None
 
 def main():
     st.title("LLM 모델 비교 v2")
