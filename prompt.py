@@ -13,6 +13,12 @@ openai_api_key = st.secrets["OPENAI_API_KEY"]
 anthropic_api_key = st.secrets["ANTHROPIC_API_KEY"]
 google_api_key = st.secrets["GOOGLE_API_KEY"]
 
+# API 키 유효성 검사
+if not openai_api_key.startswith('sk-'):
+    st.error("유효하지 않은 OpenAI API 키입니다.")
+if not anthropic_api_key.startswith('sk-ant-'):
+    st.error("유효하지 않은 Anthropic API 키입니다. API 키는 'sk-ant-'로 시작해야 합니다.")
+
 # 메인 화면
 st.title("LLM 모델 비교 v1")
 
@@ -28,7 +34,7 @@ def get_gpt4_response(prompt):
         message_placeholder = st.empty()
         full_response = ""
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4-turbo-preview",
             messages=[{"role": "user", "content": prompt}],
             stream=True
         )
@@ -38,32 +44,48 @@ def get_gpt4_response(prompt):
                 message_placeholder.markdown(full_response + "▌")
         message_placeholder.markdown(full_response)
         return full_response
+    except openai.AuthenticationError as e:
+        st.error("OpenAI API 키가 유효하지 않습니다. API 키를 확인해주세요.")
+        return None
+    except openai.RateLimitError as e:
+        st.error("OpenAI API 사용량 제한에 도달했습니다. 잠시 후 다시 시도해주세요.")
+        return None
     except Exception as e:
         st.error(f"OpenAI 에러: {str(e)}")
         return None
 
 def get_claude_response(prompt):
-    client = Anthropic(api_key=anthropic_api_key)
     try:
+        client = Anthropic(api_key=anthropic_api_key)
         message_placeholder = st.empty()
         full_response = ""
+        
         message = client.messages.create(
             model="claude-3-sonnet-20240229",
             max_tokens=1000,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }],
             stream=True
         )
+        
         for chunk in message:
-            if hasattr(chunk, 'content'):  # content 속성이 있는지 확인
-                if chunk.content:  # content가 있는 경우에만 처리
-                    for content_block in chunk.content:
-                        if content_block.text:
-                            full_response += content_block.text
-                            message_placeholder.markdown(full_response + "▌")
+            if hasattr(chunk, 'content') and chunk.content:
+                for content_block in chunk.content:
+                    if hasattr(content_block, 'text') and content_block.text:
+                        full_response += content_block.text
+                        message_placeholder.markdown(full_response + "▌")
+        
         message_placeholder.markdown(full_response)
         return full_response
+    
     except Exception as e:
-        st.error(f"Anthropic 에러: {str(e)}")
+        error_message = str(e)
+        if "authentication" in error_message.lower():
+            st.error("Anthropic API 키가 유효하지 않습니다. API 키를 확인해주세요.")
+        else:
+            st.error(f"Anthropic 에러: {error_message}")
         return None
 
 def get_gemini_response(prompt):
@@ -72,13 +94,19 @@ def get_gemini_response(prompt):
         model = genai.GenerativeModel('gemini-pro')
         message_placeholder = st.empty()
         full_response = ""
+        
         response = model.generate_content(prompt, stream=True)
+        
         for chunk in response:
-            if chunk.text:
-                full_response += chunk.text
-                message_placeholder.markdown(full_response + "▌")
+            # chunk.parts를 사용하여 텍스트 추출
+            for part in chunk.parts:
+                if part.text:
+                    full_response += part.text
+                    message_placeholder.markdown(full_response + "▌")
+        
         message_placeholder.markdown(full_response)
         return full_response
+        
     except Exception as e:
         st.error(f"Gemini 에러: {str(e)}")
         return None
