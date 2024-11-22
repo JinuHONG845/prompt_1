@@ -10,6 +10,18 @@ import re
 # 페이지 설정
 st.set_page_config(page_title="LLM 모델 비교", layout="wide")
 
+MODEL_COLORS = {
+    'ChatGPT 4O': '#00A67E',
+    'Claude 3.5': '#000000',
+    'Gemini Pro': '#1A73E8'
+}
+
+MODEL_NAMES = {
+    'GPT-4': 'ChatGPT 4O',
+    'Claude': 'Claude 3.5',
+    'Gemini': 'Gemini Pro'
+}
+
 class LLMClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -167,27 +179,25 @@ class ModelEvaluator:
             
             fig = go.Figure()
             
+            # 현재 평가 중인 모델의 데이터만 사용
+            model_name = list(evaluation_data.keys())[0]  # 첫 번째 모델만 사용
+            scores = evaluation_data[model_name]
+            
             colors = {
                 'ChatGPT 4O': '#00A67E',     # OpenAI 녹색
                 'Claude 3.5': '#000000',      # Anthropic 검정
                 'Gemini Pro': '#1A73E8'       # Google 파랑
             }
             
-            # 데이터 구조 디버깅
-            st.write("평가 데이터:", evaluation_data)
+            values = [scores[cat] for cat in categories]
             
-            for model_name, scores in evaluation_data.items():
-                try:
-                    values = [scores.get(cat, 0) for cat in categories]  # 누락된 카테고리는 0으로 처리
-                    fig.add_trace(go.Scatterpolar(
-                        r=values,
-                        theta=categories,
-                        name=model_name,
-                        fill='toself',
-                        line_color=colors.get(model_name, '#000000')
-                    ))
-                except Exception as e:
-                    st.error(f"모델 {model_name} 데이터 처리 중 오류: {str(e)}")
+            fig.add_trace(go.Scatterpolar(
+                r=values,
+                theta=categories,
+                name=model_name,
+                fill='toself',
+                line_color=colors.get(model_name, '#000000')
+            ))
             
             fig.update_layout(
                 polar=dict(
@@ -197,129 +207,44 @@ class ModelEvaluator:
                     )
                 ),
                 showlegend=True,
-                title="모델 성능 비교",
+                title=f"{model_name} 성능 평가",
                 height=400
             )
             
             return fig
+            
         except Exception as e:
             st.error(f"레이더 차트 생성 중 오류: {str(e)}")
+            st.error(f"평가 데이터: {evaluation_data}")
             return None
+
+@st.cache_data(ttl=3600)  # 1시간 캐시
+def evaluate_responses(responses: Dict[str, str], model_name: str, client: LLMClient) -> Optional[Dict]:
+    evaluator = ModelEvaluator()
+    return evaluator.evaluate_with_model(responses, model_name, client)
 
 def main():
     st.title("LLM 모델 비교 v2")
     
-    # 사이드바에 API 키 입력 필드 추가
     with st.sidebar:
         st.header("API 키 설정")
+        with st.expander("API 키 입력", expanded=True):
+            # API 키 입력 필드들...
         
-        # API 키 입력 (빈 값으로 시작)
-        openai_api_key = st.text_input(
-            "OpenAI API 키",
-            placeholder="sk-로 시작하는 키를 입력하세요",
-            type="password"
-        )
-        
-        anthropic_api_key = st.text_input(
-            "Anthropic API 키",
-            placeholder="sk-ant-로 시작하는 키를 입력하세요",
-            type="password"
-        )
-        
-        google_api_key = st.text_input(
-            "Google API 키",
-            placeholder="Google API 키를 입력하세요",
-            type="password"
-        )
-        
-        st.markdown("---")
-        st.markdown("""
-        ### API 키 발급 방법
-        1. OpenAI API 키: [OpenAI 플랫폼](https://platform.openai.com/api-keys)
-        2. Anthropic API 키: [Anthropic 콘솔](https://console.anthropic.com/)
-        3. Google API 키: [Google AI Studio](https://makersuite.google.com/app/apikey)
-        """)
+        with st.expander("API 키 발급 방법"):
+            st.markdown("""
+            1. [OpenAI API 키](https://platform.openai.com/api-keys)
+            2. [Anthropic API 키](https://console.anthropic.com/)
+            3. [Google API 키](https://makersuite.google.com/app/apikey)
+            """)
     
-    # API 키 입력 확
-    if not openai_api_key or not anthropic_api_key or not google_api_key:
-        st.warning("사이드바에서 모든 API 키를 입력해주세요.")
-        st.stop()
-    
-    # API 클라이언트 초기화
-    openai_client = OpenAIClient(openai_api_key)
-    claude_client = ClaudeClient(anthropic_api_key)
-    gemini_client = GeminiClient(google_api_key)
-    
-    # API 키 검증
-    if not openai_client.validate_api_key():
-        st.error("유효하지 않은 OpenAI API 키입니다.")
-    if not claude_client.validate_api_key():
-        st.error("유효하지 않은 Anthropic API 키입니다.")
-    if not gemini_client.validate_api_key():
-        st.error("유효하지 않은 Gemini API 키입니다.")
-    
-    # 프롬프트 입력
-    user_prompt = st.text_area(
-        "프롬프트를 입력하세요:",
-        height=100,
-        placeholder="분석하고 싶은 질문을 입력해주세요..."
-    )
-    
-    if st.button("응답 생성"):
-        if user_prompt:
-            col1, col2, col3 = st.columns(3)
-            responses = {}
-            
-            with col1:
-                st.subheader("ChatGPT 4O")
-                responses["GPT-4"] = openai_client.generate_response(user_prompt)
-            
-            with col2:
-                st.subheader("Claude 3.5")
-                responses["Claude"] = claude_client.generate_response(user_prompt)
-            
-            with col3:
-                st.subheader("Gemini Pro")
-                responses["Gemini"] = gemini_client.generate_response(user_prompt)
-            
-            # 각 모델별 평가 수행
-            if all(responses.values()):
-                st.markdown("---")
-                st.subheader("모델별 평가 결과")
-                
-                evaluator = ModelEvaluator()
-                
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.markdown("### ChatGPT 4O의 평가")
-                    gpt_evaluation = evaluator.evaluate_with_model(responses, "GPT-4", openai_client)
-                    if gpt_evaluation:
-                        fig = evaluator.create_radar_chart(gpt_evaluation)
-                        st.plotly_chart(fig, use_container_width=True)
-
-                with col2:
-                    st.markdown("### Claude 3.5의 평가")
-                    claude_evaluation = evaluator.evaluate_with_model(responses, "Claude", claude_client)
-                    if claude_evaluation:
-                        fig = evaluator.create_radar_chart(claude_evaluation)
-                        st.plotly_chart(fig, use_container_width=True)
-
-                with col3:
-                    st.markdown("### Gemini Pro의 평가")
-                    gemini_evaluation = evaluator.evaluate_with_model(responses, "Gemini", gemini_client)
-                    if gemini_evaluation:
-                        fig = evaluator.create_radar_chart(gemini_evaluation)
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                # 평가 기준 설명 자동 표시
-                st.markdown("---")
-                st.markdown("### 평가 기준 설명")
-                for criterion, description in ModelEvaluator.CRITERIA.items():
-                    st.markdown(f"#### {criterion}")
-                    st.markdown(description)
-        else:
-            st.warning("프롬프트를 입력해주세요.")
+    # 메인 영역
+    st.markdown("""
+    ### 사용 방법
+    1. 사이드바에서 각 모델의 API 키를 입력하세요
+    2. 분석하고 싶은 질문을 입력하세요
+    3. '응답 생성' 버튼을 클릭하세요
+    """)
 
 if __name__ == "__main__":
     main()
