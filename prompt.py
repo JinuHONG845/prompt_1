@@ -179,6 +179,23 @@ class ModelEvaluator:
 def main():
     st.title("LLM 모델 비교 v2")
     
+    # API 키 디버깅 (실제 배포 시에는 제거하세요!)
+    with st.expander("API 키 확인"):
+        if "OPENAI_API_KEY" in st.secrets:
+            st.success("OpenAI API 키가 존재합니다")
+        else:
+            st.error("OpenAI API 키가 없습니다")
+            
+        if "ANTHROPIC_API_KEY" in st.secrets:
+            st.success("Anthropic API 키가 존재합니다")
+        else:
+            st.error("Anthropic API 키가 없습니다")
+            
+        if "GOOGLE_API_KEY" in st.secrets:
+            st.success("Google API 키가 존재합니다")
+        else:
+            st.error("Google API 키가 없습니다")
+    
     # API 클라이언트 초기화
     openai_client = OpenAIClient(st.secrets["OPENAI_API_KEY"])
     claude_client = ClaudeClient(st.secrets["ANTHROPIC_API_KEY"])
