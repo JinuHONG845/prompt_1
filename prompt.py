@@ -141,28 +141,41 @@ class ModelEvaluator:
     def evaluate_with_model(self, responses: Dict[str, str], model_name: str, client: LLMClient) -> Optional[Dict]:
         try:
             evaluation_prompt = f"""
-            다음 AI 모델들의 응답을 5가지 기준(정확성, 완성도, 명확성, 창의성, 유용성)으로 1-10점으로 평가해 JSON 형식으로만 답변하세요.
-            반드시 아래 형식으로만 응답하세요:
-            {{
-                "ChatGPT 4O": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
-                "Claude 3.5": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
-                "Gemini Pro": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}}
-            }}
+            다음 응답들을 5가지 기준으로 평가하여 1-10점으로 점수를 매겨주세요.
+            오직 JSON 형식으로만 응답해주세요.
 
-            평가할 응답:
-            ChatGPT 4O: {responses.get("GPT-4", "응답 없음")}
-            Claude 3.5: {responses.get("Claude", "응답 없음")}
-            Gemini Pro: {responses.get("Gemini", "응답 없음")}
+            [평가할 응답들]
+            ChatGPT 4O의 응답:
+            {responses.get("ChatGPT 4O", "응답 없음")}
+
+            Claude 3.5의 응답:
+            {responses.get("Claude 3.5", "응답 없음")}
+
+            Gemini Pro의 응답:
+            {responses.get("Gemini Pro", "응답 없음")}
+
+            [평가 기준]
+            - 정확성: 정보의 사실성과 신뢰성
+            - 완성도: 응답의 포괄성과 충실성
+            - 명확성: 설명의 논리성과 이해도
+            - 창의성: 독창적 관점과 해결방안
+            - 유용성: 실용적 가치와 적용성
+
+            [응답 형식]
+            {{
+                "{model_name}": {{
+                    "정확성": (1-10점),
+                    "완성도": (1-10점),
+                    "명확성": (1-10점),
+                    "창의성": (1-10점),
+                    "유용성": (1-10점)
+                }}
+            }}
             """
             
-            if model_name == "GPT-4":
-                response = client.generate_response(evaluation_prompt)
-            elif model_name == "Claude":
-                response = client.generate_response(evaluation_prompt)
-            else:  # Gemini
-                response = client.generate_response(evaluation_prompt)
-            
+            response = client.generate_response(evaluation_prompt)
             if response:
+                # JSON 형식 추출
                 json_match = re.search(r'\{[\s\S]*\}', response)
                 if json_match:
                     return json.loads(json_match.group())
@@ -173,32 +186,27 @@ class ModelEvaluator:
             return None
 
     def create_radar_chart(self, evaluation_data: Dict) -> go.Figure:
-        """레이더 차트 생성"""
         try:
             categories = ['정확성', '완성도', '명확성', '창의성', '유용성']
-            
             fig = go.Figure()
             
-            # 현재 평가 중인 모델의 데이터만 사용
-            model_name = list(evaluation_data.keys())[0]  # 첫 번째 모델만 사용
+            # 평가 데이터에서 모델 이름과 점수 추출
+            model_name = list(evaluation_data.keys())[0]
             scores = evaluation_data[model_name]
             
-            colors = {
-                'ChatGPT 4O': '#00A67E',     # OpenAI 녹색
-                'Claude 3.5': '#000000',      # Anthropic 검정
-                'Gemini Pro': '#1A73E8'       # Google 파랑
-            }
-            
+            # 점수 리스트 생성
             values = [scores[cat] for cat in categories]
             
+            # 레이더 차트 생성
             fig.add_trace(go.Scatterpolar(
                 r=values,
                 theta=categories,
                 name=model_name,
                 fill='toself',
-                line_color=colors.get(model_name, '#000000')
+                line_color=MODEL_COLORS.get(model_name, '#000000')
             ))
             
+            # 차트 레이아웃 설정
             fig.update_layout(
                 polar=dict(
                     radialaxis=dict(
@@ -207,15 +215,14 @@ class ModelEvaluator:
                     )
                 ),
                 showlegend=True,
-                title=f"{model_name} 성능 평가",
+                title=f"{model_name} 평가 결과",
                 height=400
             )
             
             return fig
             
         except Exception as e:
-            st.error(f"레이더 차트 생성 중 오류: {str(e)}")
-            st.error(f"평가 데이터: {evaluation_data}")
+            st.error(f"차트 생성 중 오류: {str(e)}")
             return None
 
 @st.cache_data(ttl=3600)  # 1시간 캐시
