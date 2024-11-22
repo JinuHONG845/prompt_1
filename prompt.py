@@ -4,155 +4,132 @@ from anthropic import Anthropic
 import google.generativeai as genai
 import plotly.graph_objects as go
 import json
+from typing import Dict, Optional
+import re
 
 # 페이지 설정
 st.set_page_config(page_title="LLM 모델 비교", layout="wide")
 
-# API 키 설정
-openai_api_key = st.secrets["OPENAI_API_KEY"]
-anthropic_api_key = st.secrets["ANTHROPIC_API_KEY"]
-google_api_key = st.secrets["GOOGLE_API_KEY"]
+class LLMClient:
+    def __init__(self, api_key: str):
+        self.api_key = api_key
 
-# API 키 유효성 검사
-if not openai_api_key.startswith('sk-'):
-    st.error("유효하지 않은 OpenAI API 키입니다.")
-if not anthropic_api_key.startswith('sk-ant-'):
-    st.error("유효하지 않은 Anthropic API 키입니다. API 키는 'sk-ant-'로 시작해야 합니다.")
+    def validate_api_key(self) -> bool:
+        raise NotImplementedError
 
-# 메인 화면
-st.title("LLM 모델 비교 v1")
+    def generate_response(self, prompt: str) -> Optional[str]:
+        raise NotImplementedError
 
-# 프롬프트 입력
-user_prompt = st.text_area("프롬프트를 입력하세요:", 
-    height=100,
-    placeholder="질문을 입력해주세요...")
+class OpenAIClient(LLMClient):
+    def validate_api_key(self) -> bool:
+        return self.api_key.startswith('sk-')
 
-# 응답 생성 함수들
-def get_gpt4_response(prompt):
-    client = openai.OpenAI(api_key=openai_api_key)
-    try:
-        message_placeholder = st.empty()
-        full_response = ""
-        response = client.chat.completions.create(
-            model="gpt-4-turbo-preview",
-            messages=[{"role": "user", "content": prompt}],
-            stream=True
-        )
-        for chunk in response:
-            if chunk.choices[0].delta.content:
-                full_response += chunk.choices[0].delta.content
-                message_placeholder.markdown(full_response + "▌")
-        message_placeholder.markdown(full_response)
-        return full_response
-    except openai.AuthenticationError as e:
-        st.error("OpenAI API 키가 유효하지 않습니다. API 키를 확인해주세요.")
-        return None
-    except openai.RateLimitError as e:
-        st.error("OpenAI API 사용량 제한에 도달했습니다. 잠시 후 다시 시도해주세요.")
-        return None
-    except Exception as e:
-        st.error(f"OpenAI 에러: {str(e)}")
-        return None
-
-def get_claude_response(prompt):
-    try:
-        client = Anthropic(api_key=anthropic_api_key)
-        message_placeholder = st.empty()
-        full_response = ""
-        
-        message = client.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=1000,
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }],
-            stream=True
-        )
-        
-        for chunk in message:
-            if hasattr(chunk, 'content') and chunk.content:
-                for content_block in chunk.content:
-                    if hasattr(content_block, 'text') and content_block.text:
-                        full_response += content_block.text
-                        message_placeholder.markdown(full_response + "▌")
-        
-        message_placeholder.markdown(full_response)
-        return full_response
-    
-    except Exception as e:
-        error_message = str(e)
-        if "authentication" in error_message.lower():
-            st.error("Anthropic API 키가 유효하지 않습니다. API 키를 확인해주세요.")
-        else:
-            st.error(f"Anthropic 에러: {error_message}")
-        return None
-
-def get_gemini_response(prompt):
-    try:
-        genai.configure(api_key=google_api_key)
-        model = genai.GenerativeModel('gemini-pro')
-        message_placeholder = st.empty()
-        full_response = ""
-        
-        response = model.generate_content(prompt, stream=True)
-        
-        for chunk in response:
-            # chunk.parts를 사용하여 텍스트 추출
-            for part in chunk.parts:
-                if part.text:
-                    full_response += part.text
+    def generate_response(self, prompt: str) -> Optional[str]:
+        try:
+            client = openai.OpenAI(api_key=self.api_key)
+            message_placeholder = st.empty()
+            full_response = ""
+            
+            response = client.chat.completions.create(
+                model="gpt-4-turbo-preview",
+                messages=[{"role": "user", "content": prompt}],
+                stream=True
+            )
+            
+            for chunk in response:
+                if chunk.choices[0].delta.content:
+                    full_response += chunk.choices[0].delta.content
                     message_placeholder.markdown(full_response + "▌")
-        
-        message_placeholder.markdown(full_response)
-        return full_response
-        
-    except Exception as e:
-        st.error(f"Gemini 에러: {str(e)}")
-        return None
+            
+            message_placeholder.markdown(full_response)
+            return full_response
+        except Exception as e:
+            st.error(f"GPT-4 에러: {str(e)}")
+            return None
 
-# 평가 기준 설명
-evaluation_criteria = {
-    "정확성": "제공된 정보의 사실적 정확성과 신뢰성",
-    "완성도": "응답의 포괄성과 주제에 대한 충분한 설명",
-    "명확성": "설명의 논리적 구조와 이해하기 쉬운 표현",
-    "창의성": "독창적인 관점과 혁신적인 해결방안 제시",
-    "유용성": "실제 적용 가능성과 실용적 가치"
-}
+class ClaudeClient(LLMClient):
+    def validate_api_key(self) -> bool:
+        return self.api_key.startswith('sk-ant-')
 
-# 레이더 차트 생성 함수
-@st.cache_data(ttl=3600)
-def create_radar_chart(evaluation_results):
-    categories = list(evaluation_criteria.keys())
-    fig = go.Figure()
-    colors = {
-        'GPT-4': 'rgb(0, 122, 255)',
-        'Claude': 'rgb(128, 0, 128)',
-        'Gemini': 'rgb(255, 64, 129)'
+    def generate_response(self, prompt: str) -> Optional[str]:
+        try:
+            client = Anthropic(api_key=self.api_key)
+            message_placeholder = st.empty()
+            full_response = ""
+            
+            response = client.messages.create(
+                model="claude-3-sonnet-20240229",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1000,
+                stream=True
+            )
+            
+            for chunk in response:
+                if hasattr(chunk, 'content') and chunk.content:
+                    for content_block in chunk.content:
+                        if content_block.text:
+                            full_response += content_block.text
+                            message_placeholder.markdown(full_response + "▌")
+            
+            message_placeholder.markdown(full_response)
+            return full_response
+        except Exception as e:
+            st.error(f"Claude 에러: {str(e)}")
+            return None
+
+class GeminiClient(LLMClient):
+    def validate_api_key(self) -> bool:
+        return bool(self.api_key)  # Gemini API 키는 특별한 형식이 없음
+
+    def generate_response(self, prompt: str) -> Optional[str]:
+        try:
+            genai.configure(api_key=self.api_key)
+            model = genai.GenerativeModel('gemini-pro')
+            message_placeholder = st.empty()
+            full_response = ""
+            
+            response = model.generate_content(prompt, stream=True)
+            
+            for chunk in response:
+                for part in chunk.parts:
+                    if part.text:
+                        full_response += part.text
+                        message_placeholder.markdown(full_response + "▌")
+            
+            message_placeholder.markdown(full_response)
+            return full_response
+        except Exception as e:
+            st.error(f"Gemini 에러: {str(e)}")
+            return None
+
+class ModelEvaluator:
+    CRITERIA = {
+        "정확성": "제공된 정보의 사실적 정확성과 신뢰성",
+        "완성도": "응답의 포괄성과 주제에 대한 충분한 설명",
+        "명확성": "설명의 논리적 구조와 이해하기 쉬운 표현",
+        "창의성": "독창적인 관점과 혁신적인 해결방안 제시",
+        "유용성": "실제 적용 가능성과 실용적 가치"
     }
-    
-    for model, scores in evaluation_results.items():
-        fig.add_trace(go.Scatterpolar(
-            r=[scores[cat] for cat in categories],
-            theta=categories,
-            fill='toself',
-            name=model,
-            line_color=colors.get(model, 'rgb(128, 128, 128)')
-        ))
 
-    fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0, 10])),
-        showlegend=True,
-        title="LLM 모델 성능 비교"
-    )
-    return fig
+    def __init__(self, gemini_client: GeminiClient):
+        self.evaluator = gemini_client
 
-def evaluate_responses(responses):
-    try:
-        client = Anthropic(api_key=anthropic_api_key)
-        evaluation_prompt = f"""
+    def evaluate(self, responses: Dict[str, str]) -> Optional[Dict]:
+        try:
+            evaluation_prompt = self._create_evaluation_prompt(responses)
+            response = self.evaluator.generate_response(evaluation_prompt)
+            
+            if response:
+                return self._parse_evaluation_response(response)
+            return None
+        except Exception as e:
+            st.error(f"평가 중 오류 발생: {str(e)}")
+            return None
+
+    def _create_evaluation_prompt(self, responses: Dict[str, str]) -> str:
+        return f"""
         다음 AI 모델들의 응답을 5가지 기준(정확성, 완성도, 명확성, 창의성, 유용성)으로 1-10점으로 평가해 JSON 형식으로만 답변하세요.
-        각 모델별로 다음 형식으로 응답해주세요:
+        반드시 아래 형식으로만 응답하세요:
         {{
             "GPT-4": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
             "Claude": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
@@ -164,64 +141,98 @@ def evaluate_responses(responses):
         Claude: {responses.get("Claude", "응답 없음")}
         Gemini: {responses.get("Gemini", "응답 없음")}
         """
-        
-        response = client.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=1000,
-            messages=[{
-                "role": "user",
-                "content": evaluation_prompt
-            }]
-        )
-        
-        # Claude의 응답에서 JSON 부분만 추출
-        response_text = response.content[0].text
+
+    def _parse_evaluation_response(self, response: str) -> Optional[Dict]:
         try:
-            return json.loads(response_text)
-        except json.JSONDecodeError:
-            # JSON 파싱에 실패한 경우, 응답에서 JSON 형식의 텍스트를 찾아 파싱
-            import re
-            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            json_match = re.search(r'\{[\s\S]*\}', response)
             if json_match:
                 return json.loads(json_match.group())
-            else:
-                st.error("평가 결과를 JSON 형식으로 파싱할 수 없습니다.")
-                return None
-                
-    except Exception as e:
-        st.error(f"평가 중 오류 발생: {str(e)}")
-        return None
+            return None
+        except json.JSONDecodeError:
+            return None
 
-if st.button("생성"):
-    if user_prompt:
-        col1, col2, col3 = st.columns(3)
-        responses = {}
+    def create_radar_chart(self, evaluation_results: Dict) -> go.Figure:
+        categories = list(self.CRITERIA.keys())
+        fig = go.Figure()
+        colors = {
+            'GPT-4': 'rgb(0, 122, 255)',
+            'Claude': 'rgb(128, 0, 128)',
+            'Gemini': 'rgb(255, 64, 129)'
+        }
+        
+        for model, scores in evaluation_results.items():
+            fig.add_trace(go.Scatterpolar(
+                r=[scores[cat] for cat in categories],
+                theta=categories,
+                fill='toself',
+                name=model,
+                line_color=colors.get(model, 'rgb(128, 128, 128)')
+            ))
 
-        with col1:
-            st.subheader("GPT-4")
-            responses["GPT-4"] = get_gpt4_response(user_prompt)
+        fig.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 10])),
+            showlegend=True,
+            title="LLM 모델 성능 비교"
+        )
+        return fig
 
-        with col2:
-            st.subheader("Claude 3")
-            responses["Claude"] = get_claude_response(user_prompt)
-
-        with col3:
-            st.subheader("Gemini Pro")
-            responses["Gemini"] = get_gemini_response(user_prompt)
-
-        # 평가 결과 표시
-        if all(responses.values()):
-            st.markdown("---")
-            st.subheader("모델 평가")
+def main():
+    st.title("LLM 모델 비교 v2")
+    
+    # API 클라이언트 초기화
+    openai_client = OpenAIClient(st.secrets["OPENAI_API_KEY"])
+    claude_client = ClaudeClient(st.secrets["ANTHROPIC_API_KEY"])
+    gemini_client = GeminiClient(st.secrets["GOOGLE_API_KEY"])
+    
+    # API 키 검증
+    if not openai_client.validate_api_key():
+        st.error("유효하지 않은 OpenAI API 키입니다.")
+    if not claude_client.validate_api_key():
+        st.error("유효하지 않은 Anthropic API 키입니다.")
+    if not gemini_client.validate_api_key():
+        st.error("유효하지 않은 Gemini API 키입니다.")
+    
+    # 프롬프트 입력
+    user_prompt = st.text_area(
+        "프롬프트를 입력하세요:",
+        height=100,
+        placeholder="질문을 입력해주세요..."
+    )
+    
+    if st.button("생성"):
+        if user_prompt:
+            col1, col2, col3 = st.columns(3)
+            responses = {}
             
-            evaluation = evaluate_responses(responses)
-            if evaluation:
-                fig = create_radar_chart(evaluation)
-                st.plotly_chart(fig)
+            with col1:
+                st.subheader("GPT-4")
+                responses["GPT-4"] = openai_client.generate_response(user_prompt)
+            
+            with col2:
+                st.subheader("Claude 3")
+                responses["Claude"] = claude_client.generate_response(user_prompt)
+            
+            with col3:
+                st.subheader("Gemini Pro")
+                responses["Gemini"] = gemini_client.generate_response(user_prompt)
+            
+            # 평가 수행
+            if all(responses.values()):
+                st.markdown("---")
+                st.subheader("모델 평가")
+                
+                evaluator = ModelEvaluator(gemini_client)
+                evaluation = evaluator.evaluate(responses)
+                
+                if evaluation:
+                    fig = evaluator.create_radar_chart(evaluation)
+                    st.plotly_chart(fig)
+                    
+                    with st.expander("평가 기준 설명"):
+                        for criterion, description in ModelEvaluator.CRITERIA.items():
+                            st.markdown(f"**{criterion}**: {description}")
+        else:
+            st.warning("프롬프트를 입력해주세요.")
 
-                # 평가 기준 설명 (접이식)
-                with st.expander("평가 기준 설명"):
-                    for criterion, description in evaluation_criteria.items():
-                        st.markdown(f"**{criterion}**: {description}")
-    else:
-        st.warning("프롬프트를 입력해주세요.")
+if __name__ == "__main__":
+    main()
