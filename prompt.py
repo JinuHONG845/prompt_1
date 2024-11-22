@@ -49,7 +49,7 @@ class OpenAIClient(LLMClient):
 
 class ClaudeClient(LLMClient):
     def validate_api_key(self) -> bool:
-        return bool(self.api_key)  # Claude API 키는 형식이 다양할 수 있음
+        return bool(self.api_key)
 
     def generate_response(self, prompt: str) -> Optional[str]:
         try:
@@ -57,33 +57,30 @@ class ClaudeClient(LLMClient):
             message_placeholder = st.empty()
             full_response = ""
             
-            # 최신 Claude 3 Sonnet 모델 사용
+            # 스트리밍 없이 먼저 시도
             response = client.messages.create(
-                model="claude-3-sonnet-20240229",  # 최신 모델 버전
-                max_tokens=4096,  # 토큰 제한 증가
+                model="claude-3-sonnet-20240229",
                 messages=[{
                     "role": "user",
                     "content": prompt
                 }],
-                stream=True
+                max_tokens=4096,
+                stream=False  # 스트리밍 비활성화
             )
             
-            for chunk in response:
-                if hasattr(chunk, 'content') and chunk.content:
-                    for content_block in chunk.content:
-                        if hasattr(content_block, 'text') and content_block.text:
-                            full_response += content_block.text
-                            message_placeholder.markdown(full_response + "▌")
-            
-            message_placeholder.markdown(full_response)
-            return full_response
+            # 응답 텍스트 추출
+            if response.content and len(response.content) > 0:
+                full_response = response.content[0].text
+                message_placeholder.markdown(full_response)
+                return full_response
+            else:
+                st.error("Claude가 응답을 생성하지 못했습니다.")
+                return None
             
         except Exception as e:
-            error_message = str(e)
-            if "authentication" in error_message.lower():
-                st.error("Claude API 키가 유효하지 않습니다. API 키를 확인해주세요.")
-            else:
-                st.error(f"Claude 에러: {error_message}")
+            st.error(f"Claude 에러 상세: {str(e)}")
+            # 에러 타입도 출력
+            st.error(f"에러 타입: {type(e).__name__}")
             return None
 
 class GeminiClient(LLMClient):
