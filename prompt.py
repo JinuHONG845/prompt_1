@@ -179,27 +179,46 @@ class ModelEvaluator:
 def main():
     st.title("LLM 모델 비교 v2")
     
-    # API 키 디버깅 (실제 배포 시에는 제거하세요!)
-    with st.expander("API 키 확인"):
-        if "OPENAI_API_KEY" in st.secrets:
-            st.success("OpenAI API 키가 존재합니다")
-        else:
-            st.error("OpenAI API 키가 없습니다")
-            
-        if "ANTHROPIC_API_KEY" in st.secrets:
-            st.success("Anthropic API 키가 존재합니다")
-        else:
-            st.error("Anthropic API 키가 없습니다")
-            
-        if "GOOGLE_API_KEY" in st.secrets:
-            st.success("Google API 키가 존재합니다")
-        else:
-            st.error("Google API 키가 없습니다")
+    # 사이드바에 API 키 입력 필드 추가
+    with st.sidebar:
+        st.header("API 키 설정")
+        
+        # API 키 입력 (빈 값으로 시작)
+        openai_api_key = st.text_input(
+            "OpenAI API 키",
+            placeholder="sk-로 시작하는 키를 입력하세요",
+            type="password"
+        )
+        
+        anthropic_api_key = st.text_input(
+            "Anthropic API 키",
+            placeholder="sk-ant-로 시작하는 키를 입력하세요",
+            type="password"
+        )
+        
+        google_api_key = st.text_input(
+            "Google API 키",
+            placeholder="Google API 키를 입력하세요",
+            type="password"
+        )
+        
+        st.markdown("---")
+        st.markdown("""
+        ### API 키 발급 방법
+        1. OpenAI API 키: [OpenAI 플랫폼](https://platform.openai.com/api-keys)
+        2. Anthropic API 키: [Anthropic 콘솔](https://console.anthropic.com/)
+        3. Google API 키: [Google AI Studio](https://makersuite.google.com/app/apikey)
+        """)
+    
+    # API 키 입력 확인
+    if not openai_api_key or not anthropic_api_key or not google_api_key:
+        st.warning("사이드바에서 모든 API 키를 입력해주세요.")
+        st.stop()
     
     # API 클라이언트 초기화
-    openai_client = OpenAIClient(st.secrets["OPENAI_API_KEY"])
-    claude_client = ClaudeClient(st.secrets["ANTHROPIC_API_KEY"])
-    gemini_client = GeminiClient(st.secrets["GOOGLE_API_KEY"])
+    openai_client = OpenAIClient(openai_api_key)
+    claude_client = ClaudeClient(anthropic_api_key)
+    gemini_client = GeminiClient(google_api_key)
     
     # API 키 검증
     if not openai_client.validate_api_key():
