@@ -235,8 +235,9 @@ def main():
     
     with st.sidebar:
         st.header("API 키 설정")
-        with st.expander("API 키 입력", expanded=True):
-            # API 키 입력 필드들...
+        openai_api_key = st.text_input("OpenAI API 키", type="password", placeholder="sk-...")
+        anthropic_api_key = st.text_input("Anthropic API 키", type="password", placeholder="sk-ant-...")
+        google_api_key = st.text_input("Google API 키", type="password")
         
         with st.expander("API 키 발급 방법"):
             st.markdown("""
@@ -245,13 +246,91 @@ def main():
             3. [Google API 키](https://makersuite.google.com/app/apikey)
             """)
     
-    # 메인 영역
-    st.markdown("""
-    ### 사용 방법
-    1. 사이드바에서 각 모델의 API 키를 입력하세요
-    2. 분석하고 싶은 질문을 입력하세요
-    3. '응답 생성' 버튼을 클릭하세요
-    """)
+    # API 키 검증
+    if not all([openai_api_key, anthropic_api_key, google_api_key]):
+        st.warning("모든 API 키를 입력해주세요.")
+        st.stop()
+    
+    # 클라이언트 초기화
+    openai_client = OpenAIClient(openai_api_key)
+    claude_client = ClaudeClient(anthropic_api_key)
+    gemini_client = GeminiClient(google_api_key)
+    
+    # 프롬프트 입력
+    user_prompt = st.text_area("프롬프트를 입력하세요:", height=100)
+    
+    if st.button("응답 생성"):
+        if user_prompt:
+            col1, col2, col3 = st.columns(3)
+            responses = {}
+            
+            # 각 모델의 응답 생성
+            with col1:
+                st.subheader("ChatGPT 4O")
+                responses["ChatGPT 4O"] = openai_client.generate_response(user_prompt)
+            
+            with col2:
+                st.subheader("Claude 3.5")
+                responses["Claude 3.5"] = claude_client.generate_response(user_prompt)
+            
+            with col3:
+                st.subheader("Gemini Pro")
+                responses["Gemini Pro"] = gemini_client.generate_response(user_prompt)
+            
+            # 모델 평가 수행
+            if all(responses.values()):
+                st.markdown("---")
+                st.subheader("모델별 평가 결과")
+                
+                evaluator = ModelEvaluator()
+                
+                # 각 모델의 평가 결과
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.markdown("### ChatGPT 4O의 평가")
+                    try:
+                        gpt_evaluation = evaluator.evaluate_with_model(responses, "ChatGPT 4O", openai_client)
+                        st.write("평가 데이터:", gpt_evaluation)  # 디버깅용
+                        if gpt_evaluation and isinstance(gpt_evaluation, dict):
+                            fig = evaluator.create_radar_chart(gpt_evaluation)
+                            if fig:
+                                st.plotly_chart(fig, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"ChatGPT 4O 평가 중 오류: {str(e)}")
+                
+                with col2:
+                    st.markdown("### Claude 3.5의 평가")
+                    try:
+                        claude_evaluation = evaluator.evaluate_with_model(responses, "Claude 3.5", claude_client)
+                        st.write("평가 데이터:", claude_evaluation)  # 디버깅용
+                        if claude_evaluation and isinstance(claude_evaluation, dict):
+                            fig = evaluator.create_radar_chart(claude_evaluation)
+                            if fig:
+                                st.plotly_chart(fig, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Claude 3.5 평가 중 오류: {str(e)}")
+                
+                with col3:
+                    st.markdown("### Gemini Pro의 평가")
+                    try:
+                        gemini_evaluation = evaluator.evaluate_with_model(responses, "Gemini Pro", gemini_client)
+                        st.write("평가 데이터:", gemini_evaluation)  # 디버깅용
+                        if gemini_evaluation and isinstance(gemini_evaluation, dict):
+                            fig = evaluator.create_radar_chart(gemini_evaluation)
+                            if fig:
+                                st.plotly_chart(fig, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Gemini Pro 평가 중 오류: {str(e)}")
+                
+                # 평가 기준 설명
+                st.markdown("---")
+                st.markdown("### 평가 기준 설명")
+                for criterion, description in ModelEvaluator.CRITERIA.items():
+                    st.markdown(f"#### {criterion}")
+                    st.markdown(description)
+        else:
+            st.warning("프롬프트를 입력해주세요.")
 
 if __name__ == "__main__":
     main()
