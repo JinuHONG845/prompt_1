@@ -190,36 +190,61 @@ class ModelEvaluator:
             categories = ['정확성', '완성도', '명확성', '창의성', '유용성']
             fig = go.Figure()
             
+            # 디버깅을 위한 데이터 출력
+            st.write("차트 생성을 위한 데이터:", evaluation_data)
+            
+            # 데이터 구조 검증
+            if not evaluation_data or not isinstance(evaluation_data, dict):
+                st.error("유효하지 않은 평가 데이터입니다.")
+                return None
+            
             # 평가 데이터에서 모델 이름과 점수 추출
-            model_name = list(evaluation_data.keys())[0]
-            scores = evaluation_data[model_name]
-            
-            # 점수 리스트 생성
-            values = [scores[cat] for cat in categories]
-            
-            # 레이더 차트 생성
-            fig.add_trace(go.Scatterpolar(
-                r=values,
-                theta=categories,
-                name=model_name,
-                fill='toself',
-                line_color=MODEL_COLORS.get(model_name, '#000000')
-            ))
-            
-            # 차트 레이아웃 설정
-            fig.update_layout(
-                polar=dict(
-                    radialaxis=dict(
-                        visible=True,
-                        range=[0, 10]
-                    )
-                ),
-                showlegend=True,
-                title=f"{model_name} 평가 결과",
-                height=400
-            )
-            
-            return fig
+            try:
+                model_name = list(evaluation_data.keys())[0]
+                scores = evaluation_data[model_name]
+                
+                # 점수 데이터 검증
+                if not all(cat in scores for cat in categories):
+                    st.error("평가 데이터에 필요한 카테고리가 누락되었습니다.")
+                    return None
+                
+                # 점수 리스트 생성
+                values = []
+                for cat in categories:
+                    score = float(scores[cat])  # 문자열인 경우를 대비해 float로 변환
+                    if 0 <= score <= 10:  # 점수 범위 검증
+                        values.append(score)
+                    else:
+                        st.error(f"유효하지 않은 점수 범위: {cat}={score}")
+                        return None
+                
+                # 레이더 차트 생성
+                fig.add_trace(go.Scatterpolar(
+                    r=values,
+                    theta=categories,
+                    name=model_name,
+                    fill='toself',
+                    line_color=MODEL_COLORS.get(model_name, '#000000')
+                ))
+                
+                # 차트 레이아웃 설정
+                fig.update_layout(
+                    polar=dict(
+                        radialaxis=dict(
+                            visible=True,
+                            range=[0, 10]
+                        )
+                    ),
+                    showlegend=True,
+                    title=f"{model_name} 평가 결과",
+                    height=400
+                )
+                
+                return fig
+                
+            except Exception as e:
+                st.error(f"데이터 처리 중 오류: {str(e)}")
+                return None
             
         except Exception as e:
             st.error(f"차트 생성 중 오류: {str(e)}")
