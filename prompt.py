@@ -110,77 +110,55 @@ class GeminiClient(LLMClient):
 
 class ModelEvaluator:
     CRITERIA = {
-        "정확성": "제공된 정보의 사실적 정확성과 신뢰성",
-        "완성도": "응답의 포괄성과 주제에 대한 충분한 설명",
-        "명확성": "설명의 논리적 구조와 이해하기 쉬운 표현",
-        "창의성": "독창적인 관점과 혁신적인 해결방안 제시",
-        "유용성": "실제 적용 가능성과 실용적 가치"
+        "정확성": """• 제공된 정보의 사실적 정확성과 신뢰성을 평가
+• 객관적 사실과 데이터에 기반한 응답의 정확도를 측정""",
+        
+        "완성도": """• 주제에 대한 포괄적인 설명과 필요한 모든 측면을 다루는 정도
+• 누락된 정보 없이 질문의 모든 부분에 대한 충분한 답변 제공""",
+        
+        "명확성": """• 설명의 논리적 구조와 이해하기 쉬운 표현 방식
+• 복잡한 개념을 명확하고 체계적으로 전달하는 능력""",
+        
+        "창의성": """• 새롭고 독창적인 관점과 해결방안 제시 능력
+• 기존 아이디어를 혁신적으로 결합하고 발전시키는 정도""",
+        
+        "유용성": """• 실제 상황에서의 적용 가능성과 실용적 가치
+• 사용자가 즉시 활용하고 실천할 수 있는 실용적인 정보 제공"""
     }
 
-    def __init__(self, gemini_client: GeminiClient):
-        self.evaluator = gemini_client
-
-    def evaluate(self, responses: Dict[str, str]) -> Optional[Dict]:
+    def evaluate_with_model(self, responses: Dict[str, str], model_name: str, client: LLMClient) -> Optional[Dict]:
         try:
-            evaluation_prompt = self._create_evaluation_prompt(responses)
-            response = self.evaluator.generate_response(evaluation_prompt)
+            evaluation_prompt = f"""
+            다음 AI 모델들의 응답을 5가지 기준(정확성, 완성도, 명확성, 창의성, 유용성)으로 1-10점으로 평가해 JSON 형식으로만 답변하세요.
+            반드시 아래 형식으로만 응답하세요:
+            {{
+                "ChatGPT 4O": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
+                "Claude 3.5": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
+                "Gemini Pro": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}}
+            }}
+
+            평가할 응답:
+            ChatGPT 4O: {responses.get("GPT-4", "응답 없음")}
+            Claude 3.5: {responses.get("Claude", "응답 없음")}
+            Gemini Pro: {responses.get("Gemini", "응답 없음")}
+            """
+            
+            if model_name == "GPT-4":
+                response = client.generate_response(evaluation_prompt)
+            elif model_name == "Claude":
+                response = client.generate_response(evaluation_prompt)
+            else:  # Gemini
+                response = client.generate_response(evaluation_prompt)
             
             if response:
-                return self._parse_evaluation_response(response)
+                json_match = re.search(r'\{[\s\S]*\}', response)
+                if json_match:
+                    return json.loads(json_match.group())
             return None
+            
         except Exception as e:
             st.error(f"평가 중 오류 발생: {str(e)}")
             return None
-
-    def _create_evaluation_prompt(self, responses: Dict[str, str]) -> str:
-        return f"""
-        다음 AI 모델들의 응답을 5가지 기준(정확성, 완성도, 명확성, 창의성, 유용성)으로 1-10점으로 평가해 JSON 형식으로만 답변하세요.
-        반드시 아래 형식으로만 응답하세요:
-        {{
-            "GPT-4": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
-            "Claude": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
-            "Gemini": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}}
-        }}
-
-        평가할 응답:
-        GPT-4: {responses.get("GPT-4", "응답 없음")}
-        Claude: {responses.get("Claude", "응답 없음")}
-        Gemini: {responses.get("Gemini", "응답 없음")}
-        """
-
-    def _parse_evaluation_response(self, response: str) -> Optional[Dict]:
-        try:
-            json_match = re.search(r'\{[\s\S]*\}', response)
-            if json_match:
-                return json.loads(json_match.group())
-            return None
-        except json.JSONDecodeError:
-            return None
-
-    def create_radar_chart(self, evaluation_results: Dict) -> go.Figure:
-        categories = list(self.CRITERIA.keys())
-        fig = go.Figure()
-        colors = {
-            'GPT-4': 'rgb(0, 122, 255)',
-            'Claude': 'rgb(128, 0, 128)',
-            'Gemini': 'rgb(255, 64, 129)'
-        }
-        
-        for model, scores in evaluation_results.items():
-            fig.add_trace(go.Scatterpolar(
-                r=[scores[cat] for cat in categories],
-                theta=categories,
-                fill='toself',
-                name=model,
-                line_color=colors.get(model, 'rgb(128, 128, 128)')
-            ))
-
-        fig.update_layout(
-            polar=dict(radialaxis=dict(visible=True, range=[0, 10])),
-            showlegend=True,
-            title="LLM 모델 성능 비교"
-        )
-        return fig
 
 def main():
     st.title("LLM 모델 비교 v2")
@@ -216,7 +194,7 @@ def main():
         3. Google API 키: [Google AI Studio](https://makersuite.google.com/app/apikey)
         """)
     
-    # API 키 입력 확인
+    # API 키 입력 확��
     if not openai_api_key or not anthropic_api_key or not google_api_key:
         st.warning("사이드바에서 모든 API 키를 입력해주세요.")
         st.stop()
@@ -238,41 +216,62 @@ def main():
     user_prompt = st.text_area(
         "프롬프트를 입력하세요:",
         height=100,
-        placeholder="질문을 입력해주세요..."
+        placeholder="분석하고 싶은 질문을 입력해주세요..."
     )
     
-    if st.button("생성"):
+    if st.button("응답 생성"):
         if user_prompt:
             col1, col2, col3 = st.columns(3)
             responses = {}
             
             with col1:
-                st.subheader("GPT-4")
+                st.subheader("ChatGPT 4O")
                 responses["GPT-4"] = openai_client.generate_response(user_prompt)
             
             with col2:
-                st.subheader("Claude 3")
+                st.subheader("Claude 3.5")
                 responses["Claude"] = claude_client.generate_response(user_prompt)
             
             with col3:
                 st.subheader("Gemini Pro")
                 responses["Gemini"] = gemini_client.generate_response(user_prompt)
             
-            # 평가 수행
+            # 각 모델별 평가 수행
             if all(responses.values()):
                 st.markdown("---")
-                st.subheader("모델 평가")
+                st.subheader("모델별 평가 결과")
                 
-                evaluator = ModelEvaluator(gemini_client)
-                evaluation = evaluator.evaluate(responses)
+                evaluator = ModelEvaluator()
                 
-                if evaluation:
-                    fig = evaluator.create_radar_chart(evaluation)
-                    st.plotly_chart(fig)
-                    
-                    with st.expander("평가 기준 설명"):
-                        for criterion, description in ModelEvaluator.CRITERIA.items():
-                            st.markdown(f"**{criterion}**: {description}")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.markdown("### ChatGPT 4O의 평가")
+                    gpt_evaluation = evaluator.evaluate_with_model(responses, "GPT-4", openai_client)
+                    if gpt_evaluation:
+                        fig = evaluator.create_radar_chart(gpt_evaluation)
+                        st.plotly_chart(fig, use_container_width=True)
+
+                with col2:
+                    st.markdown("### Claude 3.5의 평가")
+                    claude_evaluation = evaluator.evaluate_with_model(responses, "Claude", claude_client)
+                    if claude_evaluation:
+                        fig = evaluator.create_radar_chart(claude_evaluation)
+                        st.plotly_chart(fig, use_container_width=True)
+
+                with col3:
+                    st.markdown("### Gemini Pro의 평가")
+                    gemini_evaluation = evaluator.evaluate_with_model(responses, "Gemini", gemini_client)
+                    if gemini_evaluation:
+                        fig = evaluator.create_radar_chart(gemini_evaluation)
+                        st.plotly_chart(fig, use_container_width=True)
+                
+                # 평가 기준 설명 자동 표시
+                st.markdown("---")
+                st.markdown("### 평가 기준 설명")
+                for criterion, description in ModelEvaluator.CRITERIA.items():
+                    st.markdown(f"#### {criterion}")
+                    st.markdown(description)
         else:
             st.warning("프롬프트를 입력해주세요.")
 
