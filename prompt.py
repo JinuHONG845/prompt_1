@@ -160,6 +160,41 @@ class ModelEvaluator:
             st.error(f"평가 중 오류 발생: {str(e)}")
             return None
 
+    def create_radar_chart(self, evaluation_data: Dict) -> go.Figure:
+        """레이더 차트 생성"""
+        categories = ['정확성', '완성도', '명확성', '창의성', '유용성']
+        
+        fig = go.Figure()
+        
+        colors = {
+            'ChatGPT 4O': '#00A67E',     # OpenAI 녹색
+            'Claude 3.5': '#000000',      # Anthropic 검정
+            'Gemini Pro': '#1A73E8'       # Google 파랑
+        }
+        
+        for model_name, scores in evaluation_data.items():
+            fig.add_trace(go.Scatterpolar(
+                r=[scores[cat] for cat in categories],
+                theta=categories,
+                name=model_name,
+                fill='toself',
+                line_color=colors.get(model_name, '#000000')
+            ))
+        
+        fig.update_layout(
+            polar=dict(
+                radialaxis=dict(
+                    visible=True,
+                    range=[0, 10]
+                )
+            ),
+            showlegend=True,
+            title="모델 성능 비교",
+            height=400
+        )
+        
+        return fig
+
 def main():
     st.title("LLM 모델 비교 v2")
     
@@ -194,7 +229,7 @@ def main():
         3. Google API 키: [Google AI Studio](https://makersuite.google.com/app/apikey)
         """)
     
-    # API 키 입력 확��
+    # API 키 입력 확
     if not openai_api_key or not anthropic_api_key or not google_api_key:
         st.warning("사이드바에서 모든 API 키를 입력해주세요.")
         st.stop()
