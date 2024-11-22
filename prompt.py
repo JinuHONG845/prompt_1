@@ -54,9 +54,12 @@ def get_claude_response(prompt):
             stream=True
         )
         for chunk in message:
-            if chunk.delta.text:
-                full_response += chunk.delta.text
-                message_placeholder.markdown(full_response + "▌")
+            if hasattr(chunk, 'content'):  # content 속성이 있는지 확인
+                if chunk.content:  # content가 있는 경우에만 처리
+                    for content_block in chunk.content:
+                        if content_block.text:
+                            full_response += content_block.text
+                            message_placeholder.markdown(full_response + "▌")
         message_placeholder.markdown(full_response)
         return full_response
     except Exception as e:
