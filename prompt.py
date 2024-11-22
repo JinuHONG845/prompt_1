@@ -8,18 +8,10 @@ import json
 # 페이지 설정
 st.set_page_config(page_title="LLM 모델 비교", layout="wide")
 
-# 사이드바에 API 키 입력 필드 추가
-with st.sidebar:
-    st.header("API 키 설정")
-    openai_api_key = st.text_input("OpenAI API Key", 
-        value=st.secrets.get("OPENAI_API_KEY", ""), 
-        type="password")
-    anthropic_api_key = st.text_input("Anthropic API Key", 
-        value=st.secrets.get("ANTHROPIC_API_KEY", ""), 
-        type="password")
-    google_api_key = st.text_input("Google API Key", 
-        value=st.secrets.get("GOOGLE_API_KEY", ""), 
-        type="password")
+# API 키 설정
+openai_api_key = st.secrets["OPENAI_API_KEY"]
+anthropic_api_key = st.secrets["ANTHROPIC_API_KEY"]
+google_api_key = st.secrets["GOOGLE_API_KEY"]
 
 # 메인 화면
 st.title("LLM 모델 비교 v1")
@@ -88,10 +80,19 @@ def get_gemini_response(prompt):
         st.error(f"Gemini 에러: {str(e)}")
         return None
 
+# 평가 기준 설명
+evaluation_criteria = {
+    "정확성": "제공된 정보의 사실적 정확성과 신뢰성",
+    "완성도": "응답의 포괄성과 주제에 대한 충분한 설명",
+    "명확성": "설명의 논리적 구조와 이해하기 쉬운 표현",
+    "창의성": "독창적인 관점과 혁신적인 해결방안 제시",
+    "유용성": "실제 적용 가능성과 실용적 가치"
+}
+
 # 레이더 차트 생성 함수
 @st.cache_data(ttl=3600)
 def create_radar_chart(evaluation_results):
-    categories = ['정확성', '완성도', '명확성', '창의성', '유용성']
+    categories = list(evaluation_criteria.keys())
     fig = go.Figure()
     colors = {
         'GPT-4': 'rgb(0, 122, 255)',
@@ -115,12 +116,34 @@ def create_radar_chart(evaluation_results):
     )
     return fig
 
+def evaluate_responses(responses):
+    client = openai.OpenAI(api_key=openai_api_key)
+    evaluation_prompt = f"""
+    다음 AI 모델들의 응답을 5가지 기준(정확성, 완성도, 명확성, 창의성, 유용성)으로 1-10점으로 평가해 JSON 형식으로만 답변하세요.
+    각 모델별로 다음 형식으로 응답해주세요:
+    {{
+        "GPT-4": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
+        "Claude": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
+        "Gemini": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}}
+    }}
+
+    평가할 응답:
+    GPT-4: {responses.get("GPT-4", "응답 없음")}
+    Claude: {responses.get("Claude", "응답 없음")}
+    Gemini: {responses.get("Gemini", "응답 없음")}
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": evaluation_prompt}]
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        st.error(f"평가 중 오류 발생: {str(e)}")
+        return None
+
 if st.button("생성"):
-    # API 키 확인
-    if not openai_api_key or not anthropic_api_key or not google_api_key:
-        st.warning("모든 API 키를 입력해주세요.")
-        st.stop()
-        
     if user_prompt:
         col1, col2, col3 = st.columns(3)
         responses = {}
@@ -138,27 +161,18 @@ if st.button("생성"):
             responses["Gemini"] = get_gemini_response(user_prompt)
 
         # 평가 결과 표시
-        if responses:
+        if all(responses.values()):
             st.markdown("---")
             st.subheader("모델 평가")
             
-            client = openai.OpenAI(api_key=openai_api_key)
-            evaluation_prompt = f"""
-            다음 AI 모델들의 응답을 5가지 기준으로 1-10점으로 평가해 JSON 형식으로만 답변하세요:
-            GPT-4: {responses.get("GPT-4", "응답 없음")}
-            Claude: {responses.get("Claude", "응답 없음")}
-            Gemini: {responses.get("Gemini", "응답 없음")}
-            """
-            
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-4",
-                    messages=[{"role": "user", "content": evaluation_prompt}]
-                )
-                evaluation = json.loads(response.choices[0].message.content)
+            evaluation = evaluate_responses(responses)
+            if evaluation:
                 fig = create_radar_chart(evaluation)
                 st.plotly_chart(fig)
-            except Exception as e:
-                st.error(f"평가 중 오류 발생: {str(e)}")
+
+                # 평가 기준 설명 (접이식)
+                with st.expander("평가 기준 설명"):
+                    for criterion, description in evaluation_criteria.items():
+                        st.markdown(f"**{criterion}**: {description}")
     else:
         st.warning("프롬프트를 입력해주세요.")
