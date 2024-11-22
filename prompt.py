@@ -174,6 +174,7 @@ class ModelEvaluator:
             """
             
             response = client.generate_response(evaluation_prompt)
+            st.write("응답:", response)  # 디버깅용
             if response:
                 try:
                     # JSON 문자열 추출 및 파싱
@@ -202,7 +203,7 @@ class ModelEvaluator:
                 st.error("평가 데이터가 비어있습니다.")
                 return None
             
-            categories = ['정확성', '완성도', '명확성', '창의성', '유용성']
+            categories = ['��확성', '완성도', '명확성', '창의성', '유용성']
             fig = go.Figure()
             
             # 첫 번째 모델의 데이터 추출
