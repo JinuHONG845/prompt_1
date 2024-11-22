@@ -57,7 +57,7 @@ class ClaudeClient(LLMClient):
             message_placeholder = st.empty()
             full_response = ""
             
-            # 스트리밍 없이 먼저 시도
+            # 스트리밍 모드로 변경
             response = client.messages.create(
                 model="claude-3-sonnet-20240229",
                 messages=[{
@@ -65,21 +65,21 @@ class ClaudeClient(LLMClient):
                     "content": prompt
                 }],
                 max_tokens=4096,
-                stream=False  # 스트리밍 비활성화
+                stream=True  # 스트리밍 활성화
             )
             
-            # 응답 텍스트 추출
-            if response.content and len(response.content) > 0:
-                full_response = response.content[0].text
-                message_placeholder.markdown(full_response)
-                return full_response
-            else:
-                st.error("Claude가 응답을 생성하지 못했습니다.")
-                return None
+            # 스트리밍 응답 처리
+            for chunk in response:
+                if chunk.content and len(chunk.content) > 0:
+                    content_text = chunk.content[0].text
+                    full_response += content_text
+                    message_placeholder.markdown(full_response + "▌")
+            
+            message_placeholder.markdown(full_response)
+            return full_response
             
         except Exception as e:
             st.error(f"Claude 에러 상세: {str(e)}")
-            # 에러 타입도 출력
             st.error(f"에러 타입: {type(e).__name__}")
             return None
 
