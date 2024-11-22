@@ -148,28 +148,46 @@ def create_radar_chart(evaluation_results):
     return fig
 
 def evaluate_responses(responses):
-    client = openai.OpenAI(api_key=openai_api_key)
-    evaluation_prompt = f"""
-    다음 AI 모델들의 응답을 5가지 기준(정확성, 완성도, 명확성, 창의성, 유용성)으로 1-10점으로 평가해 JSON 형식으로만 답변하세요.
-    각 모델별로 다음 형식으로 응답해주세요:
-    {{
-        "GPT-4": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
-        "Claude": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
-        "Gemini": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}}
-    }}
-
-    평가할 응답:
-    GPT-4: {responses.get("GPT-4", "응답 없음")}
-    Claude: {responses.get("Claude", "응답 없음")}
-    Gemini: {responses.get("Gemini", "응답 없음")}
-    """
-    
     try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": evaluation_prompt}]
+        client = Anthropic(api_key=anthropic_api_key)
+        evaluation_prompt = f"""
+        다음 AI 모델들의 응답을 5가지 기준(정확성, 완성도, 명확성, 창의성, 유용성)으로 1-10점으로 평가해 JSON 형식으로만 답변하세요.
+        각 모델별로 다음 형식으로 응답해주세요:
+        {{
+            "GPT-4": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
+            "Claude": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}},
+            "Gemini": {{"정확성": 8, "완성도": 7, "명확성": 9, "창의성": 8, "유용성": 7}}
+        }}
+
+        평가할 응답:
+        GPT-4: {responses.get("GPT-4", "응답 없음")}
+        Claude: {responses.get("Claude", "응답 없음")}
+        Gemini: {responses.get("Gemini", "응답 없음")}
+        """
+        
+        response = client.messages.create(
+            model="claude-3-sonnet-20240229",
+            max_tokens=1000,
+            messages=[{
+                "role": "user",
+                "content": evaluation_prompt
+            }]
         )
-        return json.loads(response.choices[0].message.content)
+        
+        # Claude의 응답에서 JSON 부분만 추출
+        response_text = response.content[0].text
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            # JSON 파싱에 실패한 경우, 응답에서 JSON 형식의 텍스트를 찾아 파싱
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                st.error("평가 결과를 JSON 형식으로 파싱할 수 없습니다.")
+                return None
+                
     except Exception as e:
         st.error(f"평가 중 오류 발생: {str(e)}")
         return None
